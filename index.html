@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mérida: dónde crecer — Reto Datlas</title>
+  <meta name="description" content="Recorrido por cuatro etapas para decidir en qué industria de servicios y en qué zona de Mérida conviene crecer.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ===================== MENÚ LATERAL ===================== -->
+  <aside class="lateral">
+    <div class="logo">
+      <span class="logo-marca">MÉRIDA</span>
+      <span class="logo-sub">¿Dónde crecer? · Reto Datlas</span>
+    </div>
+
+    <div class="selector">
+      <p class="selector-tit">Industrias a comparar</p>
+      <label class="toggle fit"><input type="checkbox" value="Fitness y deporte" checked><span></span>Fitness y deporte</label>
+      <label class="toggle mas"><input type="checkbox" value="Servicios para mascotas" checked><span></span>Servicios para mascotas</label>
+      <label class="toggle pro"><input type="checkbox" value="Servicios profesionales" checked><span></span>Servicios profesionales</label>
+    </div>
+
+    <nav class="recorrido">
+      <p class="selector-tit">Recorrido</p>
+      <a href="#decision" data-v="decision"><b>00</b><span>Tablero de decisión<small>La respuesta en una vista</small></span></a>
+      <a href="#territorio" data-v="territorio"><b>01</b><span>Territorio<small>Cómo es cada zona</small></span></a>
+      <a href="#atractividad" data-v="atractividad"><b>02</b><span>Atractividad<small>Demanda y crecimiento</small></span></a>
+      <a href="#competencia" data-v="competencia"><b>03</b><span>Competencia<small>Concentración y zonas</small></span></a>
+      <a href="#voz" data-v="voz"><b>04</b><span>Voz del cliente<small>5,220 reseñas</small></span></a>
+      <p class="selector-tit mt-s">Herramientas</p>
+      <a href="#explorador" data-v="explorador"><b>◎</b><span>Explorador territorial<small>Mapa por AGEB</small></span></a>
+      <a href="#clientes" data-v="clientes"><b>☺</b><span>Clientes tipo<small>6 user personas</small></span></a>
+      <a href="#metodo" data-v="metodo"><b>✎</b><span>Cómo lo hicimos<small>Datos y límites</small></span></a>
+    </nav>
+    <p class="creditos">Equipo 2 · Tec de Monterrey · 2026</p>
+  </aside>
+
+  <!-- ===================== CONTENIDO ===================== -->
+  <main class="contenido">
+
+    <!-- 00 TABLERO -->
+    <section class="vista" id="v-decision">
+      <header class="cabeza">
+        <p class="kicker">00 · Tablero de decisión</p>
+        <h1>Mascotas es la apuesta más clara. Fitness crece, pero ya está peleado.</h1>
+        <p class="bajada">Cruzamos 56,909 negocios, el gasto de los hogares, la competencia por zona y lo que escriben los clientes. Así se ven las tres industrias frente a frente.</p>
+      </header>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>Matriz de oportunidad</h3>
+          <p class="nota">Derecha = más clientes potenciales por negocio · Arriba = la oferta crece más rápido · Tamaño = gasto anual de los hogares</p>
+          <div class="graf alto"><canvas id="g-matriz"></canvas></div>
+        </div>
+        <div class="caja">
+          <h3>Orden de prioridad</h3>
+          <ol class="podio" id="podio"></ol>
+        </div>
+      </div>
+      <div class="caja">
+        <h3>Ficha comparativa</h3>
+        <p class="nota">El color marca cuál industria sale mejor en cada indicador.</p>
+        <div class="tabla-scroll"><table class="comparativa" id="comparativa"></table></div>
+      </div>
+    </section>
+
+    <!-- 01 TERRITORIO -->
+    <section class="vista" id="v-territorio">
+      <header class="cabeza">
+        <p class="kicker">01 · Territorio</p>
+        <h1>Una ciudad que se concentra en el norte y se expande hacia el poniente</h1>
+        <p class="bajada">Clasificamos los negocios de Mérida, dividimos la ciudad en cinco zonas desde la Plaza Grande y agrupamos las AGEB parecidas con k-means.</p>
+      </header>
+      <div class="cifras">
+        <div><b>32%</b><span>de los negocios están en el Norte, que genera 40% del empleo</span></div>
+        <div><b>−12%</b><span>negocios en el Centro frente a 2024; es la única zona que pierde</span></div>
+        <div><b>+17%</b><span>negocios en el Sur, la zona que más crece</span></div>
+        <div><b>38%</b><span>de los negocios de 2024 ya no aparecen: la ciudad rota mucho</span></div>
+      </div>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>¿Dónde están los negocios de cada industria?</h3>
+          <div class="graf"><canvas id="g-zonas"></canvas></div>
+        </div>
+        <div class="caja">
+          <h3>Anatomía de la ciudad: 4 tipos de territorio</h3>
+          <p class="nota">% de los negocios de Mérida en cada perfil</p>
+          <div class="anatomia" id="anatomia"></div>
+          <div id="perfiles-lista" class="perfiles-lista"></div>
+          <a class="ir" href="#explorador" data-capa="perfil">Ver los perfiles en el mapa →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 ATRACTIVIDAD -->
+    <section class="vista" id="v-atractividad">
+      <header class="cabeza">
+        <p class="kicker">02 · Atractividad</p>
+        <h1>Los hogares gastan casi lo mismo en mascotas que en fitness, pero hay cuatro veces menos veterinarias</h1>
+        <p class="bajada">Medimos presencia y dinamismo con el DENUE, y el gasto real de los hogares con la ENIGH 2024.</p>
+      </header>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>Gasto anual de los hogares de Mérida</h3>
+          <p class="nota">Millones de pesos · la parte sólida es el cliente ideal (deciles 8 a 10)</p>
+          <div class="graf alto"><canvas id="g-tam"></canvas></div>
+        </div>
+        <div class="caja">
+          <h3>Las 10 industrias de servicios</h3>
+          <p class="nota">Puntaje: 60% presencia + 40% negocios nuevos en 24 meses</p>
+          <div class="graf alto"><canvas id="g-ranking"></canvas></div>
+        </div>
+      </div>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>¿Qué subcategorías están creciendo?</h3>
+          <p class="nota">Cambio en el número de negocios, 2024 a 2026 · Mérida en total: +3.5%</p>
+          <div class="graf alto"><canvas id="g-crec"></canvas></div>
+        </div>
+        <div class="caja">
+          <h3>¿Quién paga?</h3>
+          <div id="cliente-ideal"></div>
+          <a class="ir" href="#clientes">Conocer a los clientes tipo →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 COMPETENCIA -->
+    <section class="vista" id="v-competencia">
+      <header class="cabeza">
+        <p class="kicker">03 · Competencia</p>
+        <h1>No hay gigantes: la competencia es contra el vecino, así que la clave es la ubicación</h1>
+        <p class="bajada">Medimos qué tan repartido está cada mercado (HHI) y cuántos hogares objetivo le tocan a cada negocio en 1.5 km a la redonda.</p>
+      </header>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>Concentración por subcategoría (HHI)</h3>
+          <p class="nota">Menos de 1,500 = mercado repartido · 10,000 = una sola empresa</p>
+          <div class="graf muy-alto"><canvas id="g-hhi"></canvas></div>
+        </div>
+        <div class="caja">
+          <h3>Dónde entrar y dónde no</h3>
+          <p class="nota">Hogares A/B y C+ por negocio a 1.5 km, en veces el promedio de la ciudad</p>
+          <div id="donde-entrar"></div>
+          <a class="ir" href="#explorador" data-capa="oportunidad">Explorar todas las zonas en el mapa →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 VOZ DEL CLIENTE -->
+    <section class="vista" id="v-voz">
+      <header class="cabeza">
+        <p class="kicker">04 · Voz del cliente</p>
+        <h1>El cliente casi nunca se queja del servicio: se queja de esperar y de que no le contesten</h1>
+        <p class="bajada">Un modelo de lenguaje en español leyó 5,220 reseñas de Google Maps. Coincide con las estrellas del cliente en 9 de cada 10 casos.</p>
+      </header>
+      <div class="cifras" id="cifras-voz"></div>
+      <div class="caja">
+        <h3>Semáforo de temas</h3>
+        <p class="nota">% de las reseñas sobre cada tema que son quejas. Da clic en una celda para ver la recomendación y las reseñas que la respaldan.</p>
+        <div class="tabla-scroll"><table class="semaforo" id="semaforo"></table></div>
+        <div id="detalle-tema" class="detalle-tema"></div>
+      </div>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>Sentimiento por industria</h3>
+          <div class="graf"><canvas id="g-sent"></canvas></div>
+        </div>
+        <div class="caja">
+          <div class="fila-tit"><h3>Palabras que más se repiten</h3>
+            <div class="segmentado" id="seg-nube"><button data-s="Negativo" class="on">Quejas</button><button data-s="Positivo">Elogios</button><button data-s="Neutral">Neutral</button></div>
+          </div>
+          <canvas id="nube" width="900" height="440"></canvas>
+        </div>
+      </div>
+      <div class="caja">
+        <div class="fila-tit"><h3>Buscador de reseñas</h3>
+          <div class="segmentado" id="seg-ej"><button data-s="Negativo" class="on">Quejas</button><button data-s="Positivo">Elogios</button></div>
+        </div>
+        <input id="buscar" type="search" placeholder="Escribe una palabra: espera, precio, limpieza, doctor…">
+        <div id="ejemplos" class="ejemplos"></div>
+      </div>
+    </section>
+
+    <!-- EXPLORADOR -->
+    <section class="vista" id="v-explorador">
+      <header class="cabeza">
+        <p class="kicker">Herramienta · Explorador territorial</p>
+        <h1>Mérida AGEB por AGEB</h1>
+        <p class="bajada">Cambia la capa, prende o apaga los negocios y da clic en cualquier zona para ver sus datos.</p>
+      </header>
+      <div class="mapa-envoltura">
+        <div id="mapa"></div>
+        <div class="mapa-panel">
+          <div class="segmentado vertical" id="seg-capa">
+            <button data-c="oportunidad" class="on">Oportunidad</button>
+            <button data-c="perfil">Tipo de territorio</button>
+            <button data-c="nse">Nivel socioeconómico</button>
+          </div>
+          <label class="check"><input type="checkbox" id="ver-puntos" checked> Mostrar negocios</label>
+          <div id="leyenda" class="leyenda"></div>
+          <div id="indicadores" class="indicadores"></div>
+          <div id="lista-zonas"></div>
+        </div>
+      </div>
+      <p class="nota" id="nota-mapa"></p>
+    </section>
+
+    <!-- CLIENTES TIPO -->
+    <section class="vista" id="v-clientes">
+      <header class="cabeza">
+        <p class="kicker">Herramienta · Clientes tipo</p>
+        <h1>Seis personas, dos por industria</h1>
+        <p class="bajada">Construidas con la ENIGH 2024, encuestas del INEGI y los resultados del recorrido. Nombres y ocupaciones son ilustrativos.</p>
+      </header>
+      <div id="personas" class="personas"></div>
+    </section>
+
+    <!-- MÉTODO -->
+    <section class="vista" id="v-metodo">
+      <header class="cabeza">
+        <p class="kicker">Herramienta · Cómo lo hicimos</p>
+        <h1>De un directorio de negocios a una decisión</h1>
+        <p class="bajada">Qué datos usamos, qué hicimos en cada paso y qué no se puede concluir.</p>
+      </header>
+      <ol class="linea">
+        <li><b>Territorio</b><p>Clasificamos los 56,909 negocios del DENUE en 10 industrias con códigos SCIAN, los ubicamos en cinco zonas desde la Plaza Grande y agrupamos 413 AGEB (con 30 o más negocios) con componentes principales y k-means según tamaño, novedad, bajas y mezcla de sectores.</p></li>
+        <li><b>Atractividad</b><p>Ranking de 60% presencia y 40% dinamismo; gasto anual de los hogares con los microdatos de la ENIGH 2024 (gasto trimestral × factor de expansión × 4); cambio neto de negocios 2024-2026; regresión logística para saber qué hogares compran.</p></li>
+        <li><b>Competencia</b><p>Índice Herfindahl-Hirschman y CR4 por subcategoría, sumando las sucursales de una misma empresa y midiendo su tamaño con personal ocupado. Hogares de nivel A/B y C+ por negocio en un radio de 1.5 km, comprobado con 1 y 2 km.</p></li>
+        <li><b>Voz del cliente</b><p>Modelo pysentimiento (RoBERTuito) para cada reseña, con corrección para reseñas de 5 palabras o menos; validación contra las estrellas (89.9%); temas por palabras clave; nubes de palabras y TF-IDF.</p></li>
+      </ol>
+      <div class="rejilla-2">
+        <div class="caja"><h3>Fuentes</h3>
+          <ul class="fuentes">
+            <li><b>DENUE, INEGI</b> · cortes de mayo 2024 y 2026</li>
+            <li><b>Censos Económicos 2024, INEGI</b> · empleo e ingresos por sector</li>
+            <li><b>ENIGH 2024, INEGI</b> · microdatos de gasto de los hogares</li>
+            <li><b>AMAI</b> · nivel socioeconómico por AGEB, Censo 2020</li>
+            <li><b>Marco Geoestadístico 2020, INEGI</b> · contornos de AGEB</li>
+            <li><b>Google Maps</b> · 5,220 reseñas con texto</li>
+          </ul></div>
+        <div class="caja"><h3>Lo que no se puede concluir</h3>
+          <details><summary>Una baja en el DENUE no es un cierre</summary><p>El DENUE es un directorio: un negocio que desaparece pudo cerrar, mudarse o cambiar de registro.</p></details>
+          <details><summary>La ENIGH no mide a las empresas</summary><p>Mide el gasto de los hogares en un trimestre; el mercado principal de servicios profesionales son las empresas.</p></details>
+          <details><summary>El nivel socioeconómico es de 2020</summary><p>Las zonas nuevas del norte y del poniente pueden tener hoy más hogares que los del censo.</p></details>
+          <details><summary>El HHI usa personal, no ventas</summary><p>El DENUE no publica ventas, así que el tamaño de cada empresa se aproxima con su personal ocupado.</p></details>
+          <details><summary>Las reseñas no son una muestra al azar</summary><p>Sirven para saber de qué se quejan y qué valoran, no para medir el porcentaje exacto de insatisfechos. En mascotas se incluyeron a propósito las peor calificadas.</p></details>
+          <details><summary>El mapa recalcula las zonas</summary><p>Las zonas se calculan AGEB por AGEB, así que pueden variar un poco respecto al reporte escrito.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
+<script src="data/resultados.js"></script>
+<script src="data/negocios.js"></script>
+<script src="data/agebs.js"></script>
+<script src="data/personas.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
