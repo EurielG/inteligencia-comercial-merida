@@ -205,3 +205,8 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
   .mapa-panel { position: static; width: auto; max-height: none; box-shadow: none; border-radius: 0; }
   #mapa { height: 440px; }
 }
+
+/* 05 Modelo predictivo */
+.zona-fila.m, .zona-fila.imp { grid-template-columns: 190px 1fr 58px; }
+.coincide p { margin: 0 0 12px; padding-left: 12px; border-left: 3px solid var(--c); font-size: 14px; }
+@media (max-width: 960px) { .zona-fila.m, .zona-fila.imp { grid-template-columns: 130px 1fr 52px; } }
