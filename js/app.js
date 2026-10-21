@@ -301,9 +301,11 @@ function faltantesModelo() {
   document.getElementById('faltantes-modelo').innerHTML = sel.map(i => {
     const t = ABR[i];
     return `<div class="zona-ind" style="--c:${COL[i]}"><h4><i class="punto ${t}"></i>${i}</h4>` +
-      M[i].faltantes.slice(0, 6).map(f => `<div class="zona-fila m"><span>${esc(f.colonia)}${f.e3 === 'recomendada' ? ' ★' : ''}</span>` +
-        `<div class="barra-z" title="Hay ${f.real} de ${f.esperado} esperados"><i style="width:${Math.min(100, 100 * f.real / f.esperado)}%"></i></div>` +
-        `<b>${f.real} / ${Math.round(f.esperado)}</b></div>`).join('') + '</div>';
+      M[i].faltantes.slice(0, 6).map(f => `<div class="zona-fila m"><span>${esc(f.colonia)}${f.e3 === 'recomendada' ? ' ★' : ''}` +
+        `<small>${f.n_ageb} AGEB a la redonda · en la AGEB: hay ${f.real_ageb}, se esperan ${f.esp_ageb}</small></span>` +
+        `<div class="barra-z" title="En 1.5 km a la redonda hay ${f.real} de ${f.esperado} esperados"><i style="width:${Math.min(100, 100 * f.real / f.esperado)}%"></i></div>` +
+        `<b>${f.real} / ${Math.round(f.esperado)}</b></div>`).join('') +
+      (i === 'Fitness y deporte' ? `<p class="aviso">Ojo: en fitness lo que más pesa es la actividad comercial de la zona, así que el modelo tiende a esperar de más en zonas muy comerciales como Campestre o México. Tómalo como zonas a revisar, no como recomendación. La Etapa 3 las marca cerca del promedio de la ciudad (0.8 a 1.1 veces), sin saturación.</p>` : '') + '</div>';
   }).join('');
 }
 
@@ -318,7 +320,7 @@ function importanciaModelo() {
 function coincideModelo() {
   const texto = {
     'Servicios para mascotas': c => `<b>${c.rec_abajo} de ${c.recomendadas}</b> zonas recomendadas en la Etapa 3 tienen menos veterinarias de las que el modelo espera, y ${c.rec_con_faltante} caen en oferta faltante (Altabrisa, Montebello, San Ramón Norte). Dos métodos distintos apuntan al mismo lugar, aunque este es el modelo menos preciso (dos de cada tres AGEB no tienen veterinaria), así que sirve como confirmación y no como cifra exacta. El modelo agrega zonas que la Etapa 3 no marcaba, como Pedregales de Tanlum y Chuburná de Hidalgo.`,
-    'Fitness y deporte': c => `<b>${c.rec_abajo} de ${c.recomendadas}</b> zonas recomendadas tienen menos gimnasios de los esperados, pero solo ${c.rec_con_faltante} llegan a oferta faltante. El modelo espera más gimnasios donde hay mucha actividad comercial (Campestre, México, Buenavista), aunque esas zonas no tienen tantos hogares objetivo por negocio. Las dos lecturas se complementan: una mide clientes por negocio y la otra compara con zonas parecidas.`,
+    'Fitness y deporte': c => `<b>${c.rec_abajo} de ${c.recomendadas}</b> zonas recomendadas tienen menos gimnasios de los esperados, pero solo ${c.rec_con_faltante} llegan a oferta faltante. El modelo espera más gimnasios donde hay mucha actividad comercial (Campestre, México, Buenavista), pero ahí la Etapa 3 marca zonas cerca del promedio (0.8 a 1.1 veces), sin saturación ni hueco claro: más tiendas y oficinas no significan más clientes de gimnasio, así que en esas zonas el modelo probablemente espera de más. Las dos lecturas se complementan: una mide clientes por negocio y la otra compara con zonas parecidas.`,
     'Servicios profesionales': c => `<b>${c.rec_abajo} de ${c.recomendadas}</b> zonas recomendadas tienen menos despachos de los esperados y <b>${c.sat_con_sobre} de ${c.saturadas}</b> zonas saturadas tienen más de lo esperado. El modelo confirma la saturación del centro. Para despachos, lo que más pesa es que haya otros servicios a empresas cerca, no los hogares: su cliente son las empresas.`,
   };
   document.getElementById('coincide-modelo').innerHTML = sel.map(i =>
@@ -348,7 +350,8 @@ function popupAgeb(p) {
   return `<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Tipo de territorio: ${p.perfil ? p.perfil + ' · ' + PERFILES[p.perfil][0] : 'sin perfil (menos de 30 negocios)'}<br>` +
     `Nivel socioeconómico: ${p.nse} · ${fmt(p.viviendas)} viviendas (${fmt(p.objetivo)} A/B o C+)<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">` +
     `<b>${i}</b> a 1.5 km: ${fmt(p[t + '_hog'])} hogares objetivo y ${p[t + '_neg']} negocios → ${p[t + '_idx']}x el promedio, ${est}` +
-    `<br>Modelo: hay ${p[t + '_mreal']} negocios a 1.5 km y se esperan ${p[t + '_mesp']} → ${MTXT[p[t + '_mod']].toLowerCase()}`;
+    `<br>Modelo, en 1.5 km a la redonda: hay ${p[t + '_mreal']} negocios y se esperan ${p[t + '_mesp']} → ${MTXT[p[t + '_mod']].toLowerCase()}` +
+    `<br>Modelo, solo en esta AGEB: hay ${p[t + '_mareal']} y se esperan ${p[t + '_maesp']}`;
 }
 function leyenda() {
   const filas = capaMapa === 'nse' ? Object.entries(NSE_COL).map(([k, v]) => [v, k])
@@ -359,7 +362,7 @@ function leyenda() {
     filas.map(([c, t]) => `<div class="fila"><span class="caja-l" style="background:${c}"></span>${t}</div>`).join('');
   document.getElementById('nota-mapa').textContent = capaMapa === 'oportunidad'
     ? 'Oportunidad: hogares de nivel A/B y C+ por negocio en 1.5 km, comparado con el promedio de la ciudad. Recomendada: 3,000+ hogares objetivo, 1.5 veces o más el promedio y estable con radios de 1 a 2 km. Saturada: mucha oferta y menos de la mitad del promedio.'
-    : capaMapa === 'modelo' ? 'Modelo predictivo (random forest): negocios reales a 1.5 km frente a los que el modelo espera según los hogares y la actividad comercial de la zona. Oferta faltante: 60% o menos de lo esperado y al menos 2 negocios menos. Sobreoferta: 1.6 veces o más y al menos 2 de más.'
+    : capaMapa === 'modelo' ? 'Modelo predictivo (random forest): negocios reales en 1.5 km a la redonda (suma de unas 10 a 20 AGEB vecinas) frente a los que el modelo espera según los hogares y la actividad comercial de la zona. Oferta faltante: 60% o menos de lo esperado y al menos 2 negocios menos. Sobreoferta: 1.6 veces o más y al menos 2 de más.'
     : capaMapa === 'perfil' ? 'Tipos de territorio de la Etapa 1: agrupamiento k-means de las AGEB con 30 o más negocios, ordenados del más central (A) al más periférico (D).'
     : 'Nivel socioeconómico predominante de cada AGEB según la regla AMAI, con base en el Censo 2020.';
 }
@@ -374,7 +377,7 @@ function indicadores() {
 function listaZonas() {
   const el = document.getElementById('lista-zonas'), i = indMapa(), t = ABR[i];
   if (capaMapa === 'modelo') {
-    el.innerHTML = `<h5>Más oferta faltante</h5><ol>${M[i].faltantes.map(f => `<li data-clave="${f.clave}">${esc(f.colonia)} · ${f.real} de ${Math.round(f.esperado)}</li>`).join('')}</ol>`;
+    el.innerHTML = `<h5>Más oferta faltante</h5><ol>${M[i].faltantes.map(f => `<li data-clave="${f.clave}">${esc(f.colonia)} · ${f.real} de ${Math.round(f.esperado)} (${f.n_ageb} AGEB)</li>`).join('')}</ol>`;
   } else if (capaMapa === 'oportunidad') {
     const li = f => `<li data-clave="${f.properties.clave}">${esc(f.properties.colonia || f.properties.clave)} · ${f.properties[t + '_idx']}x</li>`;
     el.innerHTML = `<h5>Mejores zonas</h5><ol>${topZonas(i, 'recomendada', 6).map(li).join('')}</ol><h5>Saturadas</h5><ol>${topZonas(i, 'saturada', 5).map(li).join('')}</ol>`;

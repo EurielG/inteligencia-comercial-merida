@@ -210,3 +210,6 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .zona-fila.m, .zona-fila.imp { grid-template-columns: 190px 1fr 58px; }
 .coincide p { margin: 0 0 12px; padding-left: 12px; border-left: 3px solid var(--c); font-size: 14px; }
 @media (max-width: 960px) { .zona-fila.m, .zona-fila.imp { grid-template-columns: 130px 1fr 52px; } }
+.zona-fila.m span small { display: block; font-size: 11px; color: var(--tinta-2); }
+.zona-fila.m { margin-bottom: 9px; }
+.aviso { font-size: 12px; background: #fdf1e4; border-left: 3px solid #b5651d; padding: 8px 10px; border-radius: 6px; margin: 8px 0 0; }

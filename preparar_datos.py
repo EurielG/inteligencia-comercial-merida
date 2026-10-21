@@ -284,6 +284,7 @@ for ind in FOCO:
     mod_ageb[ind] = {'esp': esp, 'real': y, 'esp15': esp15, 'real15': real15, 'estado': estado}
     e3 = zonas_res[ind]['estado']
     tabla = pd.DataFrame({'colonia': A['colonia'].values, 'nse': A['nivel_predominante'].fillna('Sin dato').values, 'real15': real15,
+                          'real_ageb': y, 'esp_ageb': esp, 'n_ageb': W15.sum(1),
                           'esp15': esp15, 'brecha': esp15 - real15, 'e3': e3, 'estado': estado}, index=A.index)
     falt = tabla[tabla['estado'] == 'faltante'].sort_values('brecha', ascending=False)
     falt = falt[falt['colonia'] != ''].drop_duplicates('colonia').head(8)
@@ -291,6 +292,7 @@ for ind in FOCO:
         'metricas': metr, 'negocios': int(y.sum()), 'agebs_cero': round(float((y == 0).mean()), 2),
         'importancia': [{'variable': k, 'peso': round(float(v), 3)} for k, v in imp.head(6).items()],
         'faltantes': [{'clave': k, 'colonia': r.colonia, 'nse': r.nse, 'real': int(r.real15), 'esperado': round(float(r.esp15), 1),
+                       'n_ageb': int(r.n_ageb), 'real_ageb': int(r.real_ageb), 'esp_ageb': round(float(r.esp_ageb), 1),
                        'e3': r.e3} for k, r in falt.iterrows()],
         'n': {e: int((estado == e).sum()) for e in ['faltante', 'abajo', 'acorde', 'arriba', 'sobreoferta']},
         'coincide': {'recomendadas': int((e3 == 'recomendada').sum()), 'rec_con_faltante': int(((e3 == 'recomendada') & (estado == 'faltante')).sum()),
@@ -348,6 +350,7 @@ for k, f in enumerate(geo['features']):
         props[t + '_hog'] = int(z['hog'][k]); props[t + '_est'] = str(z['estado'][k])
         mo = mod_ageb[ind]
         props[t + '_mreal'] = int(mo['real15'][k]); props[t + '_mesp'] = round(float(mo['esp15'][k]), 1); props[t + '_mod'] = str(mo['estado'][k])
+        props[t + '_mareal'] = int(mo['real'][k]); props[t + '_maesp'] = round(float(mo['esp'][k]), 1)
     feats.append({'type': 'Feature', 'properties': props, 'geometry': {'type': f['geometry']['type'], 'coordinates': coords}})
 json.dump({'type': 'FeatureCollection', 'features': feats}, open(os.path.join(OUT, 'agebs.geojson'), 'w'), ensure_ascii=False, separators=(',', ':'))
 
