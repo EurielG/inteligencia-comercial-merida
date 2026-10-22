@@ -213,3 +213,11 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .zona-fila.m span small { display: block; font-size: 11px; color: var(--tinta-2); }
 .zona-fila.m { margin-bottom: 9px; }
 .aviso { font-size: 12px; background: #fdf1e4; border-left: 3px solid #b5651d; padding: 8px 10px; border-radius: 6px; margin: 8px 0 0; }
+
+/* Mezcla de industrias en el popup del mapa */
+.mezcla { min-width: 250px; }
+.mezcla > b { display: block; margin-bottom: 4px; }
+.mz { display: grid; grid-template-columns: 150px 1fr 64px; gap: 6px; align-items: center; font-size: 11px; color: #6b6458; }
+.mz i { display: block; height: 7px; border-radius: 4px; }
+.mz b { text-align: right; font-weight: 600; }
+.mz.foco { color: #1f2a24; font-weight: 600; }

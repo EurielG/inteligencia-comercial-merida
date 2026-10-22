@@ -336,6 +336,10 @@ pb['perfil'] = pb['c'].map({c: chr(65 + i) for i, c in enumerate(orden_c)})
 PERFIL = pb['perfil']
 print('Perfiles (AGEB):', PERFIL.value_counts().sort_index().to_dict())
 
+# Mezcla de industrias por AGEB: cuántos negocios de cada una de las 10 industrias hay en la AGEB
+IND10 = [x['industria'] for x in ranking]
+mezcla = pd.crosstab(d26['clave'], d26['industria'].fillna('Otros giros')).reindex(columns=IND10 + ['Otros giros'], fill_value=0)
+
 # GeoJSON reducido para la página
 abrev ={'Fitness y deporte': 'fit', 'Servicios para mascotas': 'mas', 'Servicios profesionales': 'pro'}
 feats = []
@@ -343,7 +347,8 @@ for k, f in enumerate(geo['features']):
     p = f['properties']; clave = p['CVE_LOC'] + '-' + p['CVE_AGEB']; a = A.loc[clave]
     coords = json.loads(json.dumps(f['geometry']['coordinates']), parse_float=lambda x: round(float(x), 5))
     props = {'clave': clave, 'colonia': a['colonia'], 'nse': a['nivel_predominante'] if isinstance(a['nivel_predominante'], str) else 'Sin dato',
-             'viviendas': int(a['viviendas']), 'objetivo': int(a['objetivo']), 'perfil': PERFIL.get(clave, '')}
+             'viviendas': int(a['viviendas']), 'objetivo': int(a['objetivo']), 'perfil': PERFIL.get(clave, ''),
+             'mix': [int(v) for v in mezcla.loc[clave]] if clave in mezcla.index else [0] * (len(IND10) + 1)}
     for ind in FOCO:
         z = zonas_res[ind]; t = abrev[ind]
         props[t + '_idx'] = round(float(z['idx'][k]), 2); props[t + '_neg'] = int(z['neg'][k])
@@ -414,6 +419,7 @@ resultados = {
     'zonas_ref': {i: round(float(zonas_res[i]['ref'])) for i in FOCO},
     'sentimiento': sent,
     'modelo': modelo,
+    'industrias_mezcla': IND10 + ['Otros giros'],
 }
 json.dump(resultados, open(os.path.join(OUT, 'resultados.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 json.dump(negocios, open(os.path.join(OUT, 'negocios.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
