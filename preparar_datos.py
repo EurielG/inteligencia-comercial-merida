@@ -207,101 +207,81 @@ for ind in FOCO:
     zonas_res[ind] = {'hog': hog, 'neg': neg, 'idx': idx, 'estado': est, 'ref': ref}
     print(ind, 'ref', round(ref), 'recomendadas', (est == 'recomendada').sum(), 'saturadas', (est == 'saturada').sum())
 
-# ---------------- Modelo de oferta esperada por AGEB ----------------
-# Random forest que predice cuántos negocios de cada industria "debería" tener una AGEB según sus hogares
-# y el resto de su actividad comercial. Se valida con validación cruzada espacial (la ciudad se parte en 12 bloques
-# geográficos y se entrena 6 veces dejando fuera 2 bloques cada vez):
-# la predicción de cada AGEB sale de un modelo que no la vio, y es la que se usa para medir la brecha.
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import PoissonRegressor
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler as _SS
-from sklearn.model_selection import GroupKFold
-from sklearn.cluster import KMeans as _KM
-from sklearn.metrics import mean_absolute_error, mean_poisson_deviance
-from sklearn.inspection import permutation_importance
-from scipy.stats import spearmanr
+# ---------------- Índice de potencial por AGEB (sección 05) ----------------
+# Para cada AGEB con 100 o más viviendas y cada industria, un puntaje de 0 a 100 que suma cuatro factores, cada uno
+# convertido a percentil dentro de la ciudad (100 = la mejor AGEB en ese factor):
+#   competencia 35%: hogares A/B y C+ por negocio de la industria a 1.5 km (el índice de la Etapa 3)
+#   demanda 30%: hogares A/B y C+ a 1.5 km
+#   crecimiento 20%: cambio de la actividad comercial (todos los giros) a 1.5 km, 2024 a 2026
+#   nivel 15%: % de hogares A/B y C+ entre las viviendas a 1.5 km
+# Validación: (1) estabilidad ante pesos iguales, (2) comparación con las zonas de la Etapa 3 y (3) supervivencia de los
+# negocios del DENUE 2024 según el índice de su ubicación (sigue en 2026 con el mismo id o con el mismo nombre y actividad).
+from scipy.spatial import cKDTree
+from sklearn.metrics import roc_auc_score
 
-VARS_MOD = {'objetivo': 'Hogares A/B y C+ en la AGEB', 'medio': 'Hogares C y C- en la AGEB', 'bajo': 'Hogares D+, D y E en la AGEB',
-            'viviendas': 'Viviendas en la AGEB', 'objetivo_15': 'Hogares A/B y C+ a 1.5 km', 'medio_15': 'Hogares C y C- a 1.5 km',
-            'bajo_15': 'Hogares D+, D y E a 1.5 km', 'viviendas_15': 'Viviendas a 1.5 km', 'neg_otros': 'Otros negocios en la AGEB',
-            'neg_otros_15': 'Otros negocios a 1.5 km', 'pct_comercio': '% de comercio al por menor', 'pct_servicios': '% de servicios a empresas',
-            'crec': 'Crecimiento de negocios 2024-2026', 'dist_centro': 'Distancia al centro'}
-SIN_LOG = {'pct_comercio', 'pct_servicios', 'crec', 'dist_centro'}
-XM = A[['lat', 'lon', 'objetivo', 'viviendas']].copy()
-for c in ['AB', 'C+', 'C', 'C-', 'D+', 'D', 'E']:
-    XM[c] = pd.to_numeric(A[c], errors='coerce').fillna(0)
-XM['medio'] = XM['C'] + XM['C-']; XM['bajo'] = XM['D+'] + XM['D'] + XM['E']
+COSLAT = np.cos(np.radians(21))
 W15 = (DM <= 1.5).astype(float)
-for c in ['objetivo', 'medio', 'bajo', 'viviendas']:
-    XM[c + '_15'] = W15 @ XM[c].values
-XM['dist_centro'] = haversine(XM['lat'], XM['lon'], CENTRO_LAT, CENTRO_LON)
-clave24 = (pd.to_numeric(d24['cve_loc'], errors='coerce').astype('Int64').astype(str).str.zfill(4) + '-' +
-           d24['ageb'].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(4))
-sector = (d26['codigo_act'] // 10000).astype(int)
-bloques = _KM(12, random_state=0, n_init=10).fit_predict(XM[['lat', 'lon']])
-cuenta = lambda m: d26[m].groupby('clave').size().reindex(XM.index).fillna(0).values
+obj15, viv15 = W15 @ A['objetivo'].values, W15 @ A['viviendas'].values
+pct_obj = obj15 / np.maximum(viv15, 1)
+hab = A['viviendas'].values >= 100
+arbol_ageb = cKDTree(np.c_[A['lat'], A['lon'] * COSLAT])
 
-modelo, mod_ageb = {}, {}
+
+def cerca(df, lat, lon, r=1.5):
+    t = cKDTree(np.c_[df['lat'], df['lon'] * COSLAT])
+    return np.array([len(x) for x in t.query_ball_point(np.c_[lat, lon * COSLAT], r / 111)])
+
+
+t24c, t26c = d24.dropna(subset=['lat', 'lon']), d26.dropna(subset=['lat', 'lon'])
+n24, n26 = cerca(t24c, A['lat'].values, A['lon'].values), cerca(t26c, A['lat'].values, A['lon'].values)
+crec_act = (n26 - n24) / (n24 + 20)
+llave = lambda d: d['nom_estab'].astype(str).str.upper().str.replace(r'[^A-Z0-9]', '', regex=True) + '|' + d['codigo_act'].astype(int).astype(str)
+B = d24[d24['industria'].isin(FOCO)].dropna(subset=['lat', 'lon']).copy()
+B['vive'] = (B['id'].isin(d26['id']) | llave(B).isin(set(llave(d26)))).astype(int)
+
+PESOS = {'competencia': .35, 'demanda': .30, 'crecimiento': .20, 'nivel': .15}
+FACT = list(PESOS)
+percentil = lambda v: pd.Series(v).rank(pct=True).values
+ip, ip_fac, potencial = {}, {}, {'pesos': PESOS, 'industrias': {}}
 for ind in FOCO:
-    es = (d26['industria'] == ind).values
-    y = cuenta(es)
-    Xi = XM.copy()
-    Xi['neg_otros'] = cuenta(~es)
-    Xi['neg_otros_15'] = W15 @ Xi['neg_otros'].values
-    Xi['pct_comercio'] = cuenta(~es & (sector == 46).values) / Xi['neg_otros'].clip(lower=1)
-    Xi['pct_servicios'] = cuenta(~es & sector.isin([51, 52, 53, 54, 55, 56]).values) / Xi['neg_otros'].clip(lower=1)
-    otros24 = d24[d24['industria'] != ind].groupby(clave24).size().reindex(XM.index).fillna(0).values
-    Xi['crec'] = (Xi['neg_otros'] - otros24) / (otros24 + 5)
-    Z = Xi[list(VARS_MOD)].copy()
-    for c in VARS_MOD:
-        if c not in SIN_LOG: Z[c] = np.log1p(Z[c])
-    Z = Z.values
-    metr = {}
-    for nombre, m in [('rf', RandomForestRegressor(400, min_samples_leaf=5, random_state=0, n_jobs=-1)),
-                      ('poisson', make_pipeline(_SS(), PoissonRegressor(alpha=1, max_iter=2000)))]:
-        oof = np.zeros(len(y))
-        for tr, te in GroupKFold(6).split(Z, y, bloques):
-            m.fit(Z[tr], y[tr]); oof[te] = np.clip(m.predict(Z[te]), 1e-3, None)
-        base = np.full(len(y), y.mean())
-        metr[nombre] = {'mae': round(float(mean_absolute_error(y, oof)), 2),
-                        'd2': round(float(1 - mean_poisson_deviance(y, oof) / mean_poisson_deviance(y, base)), 2),
-                        'spearman': round(float(spearmanr(y, oof)[0]), 2)}
-        if nombre == 'rf': esp = oof
-    metr['base_mae'] = round(float(mean_absolute_error(y, np.full(len(y), y.mean()))), 2)
-    rf = RandomForestRegressor(400, min_samples_leaf=5, random_state=0, n_jobs=-1).fit(Z, y)
-    pi = permutation_importance(rf, Z, y, n_repeats=5, random_state=0)
-    imp = pd.Series(pi.importances_mean, index=[VARS_MOD[v] for v in VARS_MOD]).clip(lower=0)
-    imp = (imp / imp.sum()).sort_values(ascending=False)
+    neg = cerca(foco[foco['industria'] == ind], A['lat'].values, A['lon'].values)
+    bruto = {'competencia': obj15 / (neg + 1), 'demanda': obj15, 'crecimiento': crec_act, 'nivel': pct_obj}
+    sc = {k: np.full(len(A), np.nan) for k in FACT}
+    for k in FACT: sc[k][hab] = 100 * percentil(bruto[k][hab])
+    total = sum(PESOS[k] * sc[k] for k in FACT)
+    igual = sum(sc[k] for k in FACT) / len(FACT)
+    ip[ind], ip_fac[ind] = total, sc
 
-    esp15, real15 = W15 @ esp, W15 @ y
-    ratio = (real15 + 0.5) / (esp15 + 0.5)
-    habitada = A['viviendas'].values >= 100
-    estado = np.where(~habitada, 'sin_viviendas',
-             np.where((esp15 - real15 >= 2) & (ratio <= 0.6), 'faltante',
-             np.where((real15 - esp15 >= 2) & (ratio >= 1.6), 'sobreoferta',
-             np.where(ratio < 0.85, 'abajo', np.where(ratio > 1.25, 'arriba', 'acorde')))))
-    mod_ageb[ind] = {'esp': esp, 'real': y, 'esp15': esp15, 'real15': real15, 'estado': estado}
+    # Validación 1: estabilidad (top 50 con pesos iguales)
+    top_a, top_b = set(np.argsort(-np.nan_to_num(total, nan=-1))[:50]), set(np.argsort(-np.nan_to_num(igual, nan=-1))[:50])
+    # Validación 2: zonas de la Etapa 3
     e3 = zonas_res[ind]['estado']
-    tabla = pd.DataFrame({'colonia': A['colonia'].values, 'nse': A['nivel_predominante'].fillna('Sin dato').values, 'real15': real15,
-                          'real_ageb': y, 'esp_ageb': esp, 'n_ageb': W15.sum(1),
-                          'esp15': esp15, 'brecha': esp15 - real15, 'e3': e3, 'estado': estado}, index=A.index)
-    falt = tabla[tabla['estado'] == 'faltante'].sort_values('brecha', ascending=False)
-    falt = falt[falt['colonia'] != ''].drop_duplicates('colonia').head(8)
-    modelo[ind] = {
-        'metricas': metr, 'negocios': int(y.sum()), 'agebs_cero': round(float((y == 0).mean()), 2),
-        'importancia': [{'variable': k, 'peso': round(float(v), 3)} for k, v in imp.head(6).items()],
-        'faltantes': [{'clave': k, 'colonia': r.colonia, 'nse': r.nse, 'real': int(r.real15), 'esperado': round(float(r.esp15), 1),
-                       'n_ageb': int(r.n_ageb), 'real_ageb': int(r.real_ageb), 'esp_ageb': round(float(r.esp_ageb), 1),
-                       'e3': r.e3} for k, r in falt.iterrows()],
-        'n': {e: int((estado == e).sum()) for e in ['faltante', 'abajo', 'acorde', 'arriba', 'sobreoferta']},
-        'coincide': {'recomendadas': int((e3 == 'recomendada').sum()), 'rec_con_faltante': int(((e3 == 'recomendada') & (estado == 'faltante')).sum()),
-                     'rec_abajo': int(((e3 == 'recomendada') & np.isin(estado, ['faltante', 'abajo'])).sum()),
-                     'saturadas': int((e3 == 'saturada').sum()), 'sat_con_sobre': int(((e3 == 'saturada') & np.isin(estado, ['sobreoferta', 'arriba'])).sum())},
+    prom = lambda m: round(float(np.nanmean(total[m])), 1)
+    # Validación 3: supervivencia. Índice en la ubicación de cada negocio de 2024 con la competencia de 2024 (sin crecimiento,
+    # que se mide en el mismo periodo de la supervivencia). Se compara contra los valores de las AGEB habitadas.
+    b = B[B['industria'] == ind]
+    _, ix = arbol_ageb.query(np.c_[b['lat'], b['lon'] * COSLAT])
+    neg_b = cerca(b, b['lat'].values, b['lon'].values) - 1
+    neg_a = cerca(b, A['lat'].values, A['lon'].values)
+    ref = {'competencia': (obj15 / (neg_a + 1))[hab], 'demanda': obj15[hab], 'nivel': pct_obj[hab]}
+    val = {'competencia': obj15[ix] / (neg_b + 1), 'demanda': obj15[ix], 'nivel': pct_obj[ix]}
+    s_b = sum(PESOS[k] * 100 * np.searchsorted(np.sort(ref[k]), val[k]) / len(ref[k]) for k in val) / sum(PESOS[k] for k in val)
+    yv = b['vive'].values
+    quint = pd.qcut(pd.Series(s_b).rank(method='first'), 5, labels=False).values
+    tabla = pd.DataFrame({'colonia': A['colonia'].values, 'nse': A['nivel_predominante'].fillna('Sin dato').values, 'ip': total, 'neg': neg,
+                          'e3': e3, **{k: sc[k] for k in FACT}}, index=A.index).dropna(subset=['ip'])
+    mejores = tabla[tabla['colonia'] != ''].sort_values('ip', ascending=False).drop_duplicates('colonia').head(8)
+    potencial['industrias'][ind] = {
+        'mejores': [{'clave': c, 'colonia': r.colonia, 'nse': r.nse, 'ip': round(float(r.ip)), 'negocios': int(r.neg), 'e3': r.e3,
+                     'factores': {k: round(float(r[k])) for k in FACT}} for c, r in mejores.iterrows()],
+        'estable_top50': len(top_a & top_b),
+        'e3': {'recomendadas': prom(e3 == 'recomendada'), 'saturadas': prom(e3 == 'saturada'), 'resto': prom((e3 == 'neutral') & hab),
+               'rec_en_top50': int(sum(e3[i] == 'recomendada' for i in top_a)), 'n_rec': int((e3 == 'recomendada').sum())},
+        'supervivencia': {'negocios': int(len(b)), 'total': round(float(yv.mean()), 3), 'auc': round(float(roc_auc_score(yv, s_b)), 3),
+                          'quintiles': [round(float(yv[quint == q].mean()), 3) for q in range(5)]},
     }
-    print(ind, metr, modelo[ind]['n'], modelo[ind]['coincide'])
-    print('   ', [(v['variable'], v['peso']) for v in modelo[ind]['importancia']])
-    print('   ', [(f['colonia'], f['real'], f['esperado'], f['e3']) for f in modelo[ind]['faltantes']])
+    print(ind, {k: v for k, v in potencial['industrias'][ind].items() if k != 'mejores'})
+    print('   ', [(m['colonia'], m['ip']) for m in potencial['industrias'][ind]['mejores']])
 
 # ---------------- Etapa 1: perfiles de territorio A-D (mismo método que el notebook de la Etapa 1) ----------------
 from sklearn.cluster import KMeans
@@ -353,9 +333,8 @@ for k, f in enumerate(geo['features']):
         z = zonas_res[ind]; t = abrev[ind]
         props[t + '_idx'] = round(float(z['idx'][k]), 2); props[t + '_neg'] = int(z['neg'][k])
         props[t + '_hog'] = int(z['hog'][k]); props[t + '_est'] = str(z['estado'][k])
-        mo = mod_ageb[ind]
-        props[t + '_mreal'] = int(mo['real15'][k]); props[t + '_mesp'] = round(float(mo['esp15'][k]), 1); props[t + '_mod'] = str(mo['estado'][k])
-        props[t + '_mareal'] = int(mo['real'][k]); props[t + '_maesp'] = round(float(mo['esp'][k]), 1)
+        props[t + '_ip'] = None if np.isnan(ip[ind][k]) else round(float(ip[ind][k]))
+        props[t + '_ipf'] = None if np.isnan(ip[ind][k]) else [round(float(ip_fac[ind][f][k])) for f in FACT]
     feats.append({'type': 'Feature', 'properties': props, 'geometry': {'type': f['geometry']['type'], 'coordinates': coords}})
 json.dump({'type': 'FeatureCollection', 'features': feats}, open(os.path.join(OUT, 'agebs.geojson'), 'w'), ensure_ascii=False, separators=(',', ':'))
 
@@ -418,7 +397,7 @@ resultados = {
     'concentracion': conc,
     'zonas_ref': {i: round(float(zonas_res[i]['ref'])) for i in FOCO},
     'sentimiento': sent,
-    'modelo': modelo,
+    'potencial': potencial,
     'industrias_mezcla': IND10 + ['Otros giros'],
 }
 json.dump(resultados, open(os.path.join(OUT, 'resultados.json'), 'w'), ensure_ascii=False, separators=(',', ':'))

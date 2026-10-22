@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261021c">
+  <link rel="stylesheet" href="css/estilos.css?v=20261022b">
 </head>
 <body>
 <div class="app">
@@ -34,7 +34,7 @@
       <a href="#atractividad" data-v="atractividad"><b>02</b><span>Atractividad<small>Demanda y crecimiento</small></span></a>
       <a href="#competencia" data-v="competencia"><b>03</b><span>Competencia<small>Concentración y zonas</small></span></a>
       <a href="#voz" data-v="voz"><b>04</b><span>Voz del cliente<small>5,220 reseñas</small></span></a>
-      <a href="#modelo" data-v="modelo"><b>05</b><span>Modelo predictivo<small>Oferta esperada por AGEB</small></span></a>
+      <a href="#modelo" data-v="modelo"><b>05</b><span>Índice de potencial<small>Dónde le iría mejor</small></span></a>
       <p class="selector-tit mt-s">Herramientas</p>
       <a href="#explorador" data-v="explorador"><b>◎</b><span>Explorador territorial<small>Mapa por AGEB</small></span></a>
       <a href="#clientes" data-v="clientes"><b>☺</b><span>Clientes tipo<small>6 user personas</small></span></a>
@@ -189,40 +189,43 @@
       </div>
     </section>
 
-    <!-- 05 MODELO PREDICTIVO -->
+    <!-- 05 ÍNDICE DE POTENCIAL -->
     <section class="vista" id="v-modelo">
       <header class="cabeza">
-        <p class="kicker">05 · Modelo predictivo</p>
-        <h1>Un modelo confirma el hueco: cerca de Altabrisa se esperan unas 12 veterinarias y hay 2</h1>
-        <p class="bajada">Entrenamos un random forest que aprende cuántos negocios de cada industria tiene una zona según sus hogares y su actividad comercial. Donde hay muchos menos de los esperados, hay oferta faltante.</p>
+        <p class="kicker">05 · Índice de potencial</p>
+        <h1>¿Dónde le iría mejor a un negocio nuevo? Las Américas y el norte de nivel alto encabezan las tres industrias</h1>
+        <p class="bajada">Juntamos lo que medimos en las etapas anteriores en un solo puntaje de 0 a 100 para cada AGEB. Entre más alto, más clientes de nivel alto, menos competencia y más crecimiento alrededor.</p>
       </header>
-      <div class="cifras" id="cifras-modelo"></div>
+      <div class="cifras" id="cifras-potencial"></div>
       <div class="caja">
-        <h3>¿Qué tan bien predice?</h3>
-        <p class="nota">Validación cruzada espacial: cada zona se predice con un modelo que no la vio. Se compara contra adivinar siempre el promedio.</p>
-        <div class="tabla-scroll"><table class="comparativa" id="tabla-modelo"></table></div>
+        <h3>Cómo se calcula el puntaje</h3>
+        <p class="nota">Cada factor se califica de 0 a 100 comparando la AGEB con el resto de Mérida (100 = la mejor de la ciudad en ese factor). Después se suman con estos pesos. Solo se califican las AGEB con 100 viviendas o más.</p>
+        <div class="pesos" id="pesos-potencial"></div>
       </div>
-      <div class="rejilla-2">
-        <div class="caja">
-          <h3>Dónde falta oferta según el modelo</h3>
-          <p class="nota">Negocios en 1.5 km a la redonda (suma de todas las AGEB vecinas): los que hay frente a los que el modelo espera. Abajo de cada zona, el dato de la AGEB sola. ★ = también es zona recomendada en la Etapa 3.</p>
-          <div id="faltantes-modelo"></div>
-          <a class="ir" href="#explorador" data-capa="modelo">Ver la oferta faltante en el mapa →</a>
-        </div>
-        <div class="caja">
-          <h3>¿Qué explica dónde hay negocios?</h3>
-          <p class="nota">Peso de cada variable en el modelo (importancia por permutación)</p>
-          <div id="importancia-modelo"></div>
+      <div class="caja">
+        <div class="fila-tit"><h3>Mapa de potencial</h3><p class="nota" id="ip-industria"></p></div>
+        <div class="mapa-envoltura ip">
+          <div id="mapa-ip"></div>
+          <div class="mapa-panel"><div id="leyenda-ip" class="leyenda"></div><div id="mejores-potencial"></div></div>
         </div>
       </div>
       <div class="caja">
-        <h3>¿Coincide con la Etapa 3?</h3>
-        <div id="coincide-modelo" class="coincide"></div>
-        <details><summary>Cómo funciona el modelo</summary>
-          <p>Para cada una de las 526 AGEB armamos 14 variables: hogares por nivel socioeconómico (en la AGEB y a 1.5 km), viviendas, otros negocios, porcentaje de comercio y de servicios a empresas, crecimiento de negocios 2024-2026 y distancia al centro. Para no hacer trampa, las variables de negocios excluyen a la industria que se predice.</p>
-          <p>Un random forest (400 árboles) aprende la relación entre esas variables y el número de negocios de la industria. Para validarlo partimos la ciudad en 12 bloques geográficos y entrenamos 6 veces, dejando fuera 2 bloques cada vez; así cada zona se predice con un modelo que no la vio. Lo comparamos con una regresión de Poisson y con un modelo que siempre predice el promedio.</p>
-          <p>Después sumamos negocios reales y esperados en 1.5 km a la redonda. <b>Oferta faltante</b>: AGEB con 100 o más viviendas donde hay 60% o menos de los negocios esperados y faltan al menos 2. <b>Sobreoferta</b>: 1.6 veces o más de lo esperado y al menos 2 de más.</p>
-        </details>
+        <h3>¿Podemos confiar en el puntaje?</h3>
+        <p class="nota">Tres pruebas: si cambia al mover los pesos, si coincide con la Etapa 3 y si los negocios que ya existían sobrevivieron más donde el puntaje es alto.</p>
+        <div class="tabla-scroll"><table class="comparativa" id="tabla-validacion"></table></div>
+        <div class="coincide">
+          <p style="--c:#3f8a5b"><b>Es estable.</b> Si los cuatro factores pesaran lo mismo, entre 37 y 45 de las 50 mejores AGEB seguirían siendo las mismas. El resultado no depende de los pesos que elegimos.</p>
+          <p style="--c:#3f8a5b"><b>Coincide con la Etapa 3.</b> Las zonas recomendadas sacan entre 70 y 85 puntos en promedio y las saturadas, alrededor de 30.</p>
+          <p style="--c:#b5651d"><b>La supervivencia no lo confirma.</b> En mascotas los negocios sobrevivieron un poco más donde el puntaje es alto; en fitness no hay diferencia, y en servicios profesionales sobrevivieron más los despachos del Centro, que tiene puntaje bajo. El puntaje mide si hay espacio para un negocio nuevo; la supervivencia mide si uno que ya tenía clientes siguió abierto. Un despacho con años en el Centro aguanta aunque la zona esté saturada para alguien que llega.</p>
+        </div>
+      </div>
+      <div class="caja">
+        <h3>Lo que el puntaje no incluye</h3>
+        <ul class="fuentes">
+          <li><b>El HHI y la voz del cliente</b> · se miden por industria, no por zona, así que no cambian el mapa. Sirven para comparar industrias (Tablero de decisión).</li>
+          <li><b>Rentas, tráfico y visibilidad del local</b> · no hay datos públicos por AGEB.</li>
+          <li><b>Empresas como clientes</b> · en servicios profesionales el cliente principal son las empresas; el puntaje solo cuenta hogares.</li>
+        </ul>
       </div>
     </section>
 
@@ -238,7 +241,6 @@
         <div class="mapa-panel">
           <div class="segmentado vertical" id="seg-capa">
             <button data-c="oportunidad" class="on">Oportunidad</button>
-            <button data-c="modelo">Modelo: oferta faltante</button>
             <button data-c="mezcla">% de la industria</button>
             <button data-c="perfil">Tipo de territorio</button>
             <button data-c="nse">Nivel socioeconómico</button>
@@ -274,7 +276,7 @@
         <li><b>Atractividad</b><p>Ranking de 60% presencia y 40% dinamismo; gasto anual de los hogares con los microdatos de la ENIGH 2024 (gasto trimestral × factor de expansión × 4); cambio neto de negocios 2024-2026; regresión logística para saber qué hogares compran.</p></li>
         <li><b>Competencia</b><p>Índice Herfindahl-Hirschman y CR4 por subcategoría, sumando las sucursales de una misma empresa y midiendo su tamaño con personal ocupado. Hogares de nivel A/B y C+ por negocio en un radio de 1.5 km, comprobado con 1 y 2 km.</p></li>
         <li><b>Voz del cliente</b><p>Modelo pysentimiento (RoBERTuito) para cada reseña, con corrección para reseñas de 5 palabras o menos; validación contra las estrellas (89.9%); temas por palabras clave; nubes de palabras y TF-IDF.</p></li>
-        <li><b>Modelo predictivo</b><p>Random forest que predice cuántos negocios de cada industria debería tener cada AGEB según sus hogares y su actividad comercial, validado con validación cruzada espacial; la diferencia entre lo esperado y lo real marca oferta faltante o sobreoferta.</p></li>
+        <li><b>Índice de potencial</b><p>Puntaje de 0 a 100 por AGEB que suma, en percentiles de la ciudad, la competencia (35%), la demanda de hogares A/B y C+ (30%), el crecimiento de la actividad comercial (20%) y el nivel socioeconómico (15%). Se probó contra pesos iguales, contra las zonas de la Etapa 3 y contra la supervivencia de los negocios 2024-2026.</p></li>
       </ol>
       <div class="rejilla-2">
         <div class="caja"><h3>Fuentes</h3>
@@ -292,7 +294,7 @@
           <details><summary>El nivel socioeconómico es de 2020</summary><p>Las zonas nuevas del norte y del poniente pueden tener hoy más hogares que los del censo.</p></details>
           <details><summary>El HHI usa personal, no ventas</summary><p>El DENUE no publica ventas, así que el tamaño de cada empresa se aproxima con su personal ocupado.</p></details>
           <details><summary>Las reseñas no son una muestra al azar</summary><p>Sirven para saber de qué se quejan y qué valoran, no para medir el porcentaje exacto de insatisfechos. En mascotas se incluyeron a propósito las peor calificadas.</p></details>
-          <details><summary>El modelo aprende de la ciudad como está hoy</summary><p>Si toda Mérida tuviera pocas veterinarias, el modelo no lo notaría: mide qué zonas tienen menos que otras parecidas, no cuántas debería haber en total. En mascotas predice con menos precisión porque dos de cada tres AGEB no tienen ninguna.</p></details>
+          <details><summary>El índice de potencial es una suma con pesos</summary><p>Los pesos los elegimos nosotros; por eso mostramos que las mejores zonas casi no cambian con pesos iguales. Mide espacio para un negocio nuevo, no ventas ni rentabilidad.</p></details>
           <details><summary>El mapa recalcula las zonas</summary><p>Las zonas se calculan AGEB por AGEB, así que pueden variar un poco respecto al reporte escrito.</p></details>
         </div>
       </div>
@@ -303,10 +305,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
-<script src="data/resultados.js?v=20261021c"></script>
-<script src="data/negocios.js?v=20261021c"></script>
-<script src="data/agebs.js?v=20261021c"></script>
-<script src="data/personas.js?v=20261021c"></script>
-<script src="js/app.js?v=20261021c"></script>
+<script src="data/resultados.js?v=20261022b"></script>
+<script src="data/negocios.js?v=20261022b"></script>
+<script src="data/agebs.js?v=20261022b"></script>
+<script src="data/personas.js?v=20261022b"></script>
+<script src="js/app.js?v=20261022b"></script>
 </body>
 </html>
