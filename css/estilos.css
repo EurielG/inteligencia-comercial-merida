@@ -221,3 +221,5 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .mz i { display: block; height: 7px; border-radius: 4px; }
 .mz b { text-align: right; font-weight: 600; }
 .mz.foco { color: #1f2a24; font-weight: 600; }
+.apilada { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 4px 0 8px; }
+.apilada i { display: block; height: 100%; }

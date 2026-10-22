@@ -333,6 +333,8 @@ const NSE_COL = { 'A/B': '#1f3d33', 'C+': '#3f6b55', 'C': '#8fb09b', 'C-': '#d5e
 const indMapa = () => (sel.length === 1 ? sel[0] : sel.includes('Servicios para mascotas') ? 'Servicios para mascotas' : sel[0]);
 
 const MIX = R.industrias_mezcla;
+const COL_MIX = { 'Restaurantes y alimentos': '#d9a441', 'Cuidado personal y belleza': '#d77fa1', 'Salud y bienestar': '#3f8a5b', 'Educación': '#8fb09b',
+  'Servicios financieros': '#5b7c99', 'Turismo y hospitalidad': '#c9a27e', 'Entretenimiento': '#e07a5f', 'Otros giros': '#d8d1c4' };
 const PCT_COL = [['#f6f3ee', 'Menos de 10 negocios en la AGEB'], ['#ece6da', '0%'], ['#d6e4ef', 'Menos de 1%'], ['#9cc3dd', '1% a 3%'], ['#4f8fbf', '3% a 6%'], ['#1f4f7a', '6% o más']];
 function pctInd(p) { const tot = p.mix.reduce((a, b) => a + b, 0); return { tot, n: p.mix[MIX.indexOf(indMapa())], pct: tot ? 100 * p.mix[MIX.indexOf(indMapa())] / tot : 0 }; }
 function colorPct(p) {
@@ -344,9 +346,11 @@ function mezclaHtml(p) {
   if (!tot) return '<br><i>Sin negocios registrados en el DENUE</i>';
   const filas = MIX.map((ind, k) => [ind, p.mix[k]]).filter(([ind, n]) => n > 0 || INDS.includes(ind))
     .sort((a, b) => (b[0] === 'Otros giros' ? -1 : a[0] === 'Otros giros' ? 1 : b[1] - a[1]));
-  return `<div class="mezcla"><b>${fmt(tot)} negocios en esta AGEB</b>` + filas.map(([ind, n]) => {
+  const apilada = filas.filter(([, n]) => n > 0).map(([ind, n]) =>
+    `<i title="${ind}: ${(100 * n / tot).toFixed(1)}%" style="width:${100 * n / tot}%;background:${COL[ind] || COL_MIX[ind] || '#d8d1c4'}"></i>`).join('');
+  return `<div class="mezcla"><b>Industrias en esta AGEB · ${fmt(tot)} negocios</b><div class="apilada">${apilada}</div>` + filas.map(([ind, n]) => {
     const pct = 100 * n / tot, foco = INDS.includes(ind);
-    return `<div class="mz${foco ? ' foco' : ''}"><span>${ind}</span><i style="width:${Math.max(pct, n ? 1.5 : 0)}%;background:${COL[ind] || '#b3aa9b'}"></i><b>${pct < 1 && n ? pct.toFixed(1) : Math.round(pct)}% · ${n}</b></div>`;
+    return `<div class="mz${foco ? ' foco' : ''}"><span>${ind}</span><i style="width:${Math.max(pct, n ? 1.5 : 0)}%;background:${COL[ind] || COL_MIX[ind] || '#d8d1c4'}"></i><b>${pct < 1 && n ? pct.toFixed(1) : Math.round(pct)}% · ${n}</b></div>`;
   }).join('') + '</div>';
 }
 
