@@ -338,6 +338,129 @@ function validacionPotencial() {
     filas.map(([t, f]) => `<tr><td>${t}</td>${sel.map(i => `<td>${f(PT.industrias[i])}</td>`).join('')}</tr>`).join('');
 }
 
+/* ===================== SIMULADOR DE LOCAL (MODELO DE HUFF) ===================== */
+// Probabilidad de que los hogares de la AGEB i elijan el local j: (A_j^alfa / d_ij^beta) / suma_k (A_k^alfa / d_ik^beta),
+// con k = todos los locales de la industria a dmax km o menos. A = personal ocupado (punto medio del rango del DENUE).
+const HUFF = { alfa: 0.5, beta: 2, dmax: 5, dmin: 0.25 };
+const TAM_MED = { '0 a 5': 3, '6 a 10': 8, '11 a 30': 20, '31 a 50': 40, '51 a 100': 75, '101 a 250': 175, '251 y más': 300 };
+const KX = 111.32 * Math.cos(21 * Math.PI / 180), KY = 110.57;
+const km = (la1, lo1, la2, lo2) => Math.hypot((lo2 - lo1) * KX, (la2 - la1) * KY);
+const CEN = G.features.map(f => {
+  const g = f.geometry, r = g.type === 'Polygon' ? g.coordinates[0] : g.coordinates[0][0];
+  return { lat: r.reduce((a, p) => a + p[1], 0) / r.length, lon: r.reduce((a, p) => a + p[0], 0) / r.length, h: f.properties.objetivo, p: f.properties };
+});
+let simInd = 'Servicios para mascotas', simTam = '6 a 10', mapaSim, capaSim, capaComp, marcaSim, simPunto = null, huffCache = {};
+
+function huffBase(ind) {
+  // Atractivo acumulado de la competencia en cada AGEB (S_i) y captación de cada local existente
+  const clave = ind + '|' + HUFF.beta;
+  if (huffCache[clave]) return huffCache[clave];
+  const comp = N.filas.filter(f => N.industrias[f[2]] === ind)
+    .map(f => ({ lat: f[0], lon: f[1], a: Math.pow(TAM_MED[f[5]] || 3, HUFF.alfa), nombre: f[4], sub: N.subcategorias[f[3]], per: f[5] }));
+  const S = CEN.map(c => comp.reduce((s, k) => { const d = km(c.lat, c.lon, k.lat, k.lon); return d <= HUFF.dmax ? s + k.a / Math.pow(Math.max(d, HUFF.dmin), HUFF.beta) : s; }, 0));
+  const capt = comp.map(k => CEN.reduce((s, c, i) => { const d = km(c.lat, c.lon, k.lat, k.lon);
+    return d <= HUFF.dmax && S[i] > 0 ? s + c.h * (k.a / Math.pow(Math.max(d, HUFF.dmin), HUFF.beta)) / S[i] : s; }, 0));
+  const orden = [...capt].sort((a, b) => a - b), mediana = orden[Math.floor(orden.length / 2)];
+  return (huffCache[clave] = { comp, S, capt, mediana });
+}
+
+function huffLocal(lat, lon, ind, tam) {
+  const B = huffBase(ind), a = Math.pow(TAM_MED[tam], HUFF.alfa);
+  let total = 0, alcance = 0; const prob = new Array(CEN.length).fill(0), tn = new Array(CEN.length).fill(0), aporte = [];
+  CEN.forEach((c, i) => {
+    const d = km(c.lat, c.lon, lat, lon); if (d > HUFF.dmax) return;
+    const t = a / Math.pow(Math.max(d, HUFF.dmin), HUFF.beta), pr = t / (B.S[i] + t);
+    prob[i] = pr; tn[i] = t; total += c.h * pr; alcance += c.h; if (c.h * pr >= 1) aporte.push({ i, h: c.h * pr, d });
+  });
+  // Cuántos clientes le quitas a cada competidor cercano
+  const perdida = B.comp.map((k, j) => {
+    let p = 0;
+    CEN.forEach((c, i) => {
+      if (!prob[i]) return; const d = km(c.lat, c.lon, k.lat, k.lon); if (d > HUFF.dmax) return;
+      const tk = k.a / Math.pow(Math.max(d, HUFF.dmin), HUFF.beta);
+      p += c.h * (tk / B.S[i] - tk / (B.S[i] + tn[i]));
+    });
+    return { j, p };
+  }).filter(x => x.p >= 1).sort((x, y) => y.p - x.p);
+  return { total, alcance, prob, aporte: aporte.sort((x, y) => y.h - x.h), perdida, mediana: B.mediana, a };
+}
+
+function huffCiudad(ind, tam) {
+  // Captación si el local se abriera en el centro de cada AGEB habitada
+  const B = huffBase(ind), a = Math.pow(TAM_MED[tam], HUFF.alfa);
+  return CEN.map((o, j) => o.p.viviendas < 100 ? null : CEN.reduce((s, c, i) => {
+    const d = km(c.lat, c.lon, o.lat, o.lon); if (d > HUFF.dmax) return s;
+    const t = a / Math.pow(Math.max(d, HUFF.dmin), HUFF.beta); return s + c.h * t / (B.S[i] + t); }, 0));
+}
+
+const SIM_COL = v => (v >= 0.5 ? '#08306b' : v >= 0.3 ? '#2171b5' : v >= 0.15 ? '#6baed6' : v >= 0.05 ? '#c6dbef' : null);
+const CIU_COL = (v, q) => (v == null ? '#f1ede6' : v >= q[3] ? '#08306b' : v >= q[2] ? '#2171b5' : v >= q[1] ? '#6baed6' : v >= q[0] ? '#c6dbef' : '#eef3f8');
+
+function iniciarSim() {
+  mapaSim = L.map('mapa-sim', { scrollWheelZoom: false }).setView([21.0, -89.62], 12);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Mapa base &copy; Esri, HERE, Garmin, &copy; OpenStreetMap', maxZoom: 17 }).addTo(mapaSim);
+  capaSim = L.geoJSON(G, { style: { weight: 0.4, color: '#fffdf9', fillOpacity: 0, fillColor: '#fff' } }).addTo(mapaSim);
+  setTimeout(() => { mapaSim.invalidateSize(); mapaSim.setView([20.995, -89.62], 12); }, 60);
+  mapaSim.on('click', e => ponerLocal(e.latlng.lat, e.latlng.lng));
+  document.querySelectorAll('#sim-ind button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#sim-ind button').forEach(x => x.classList.toggle('on', x === b)); simInd = b.dataset.i; pintarSim(); }));
+  document.getElementById('sim-tam').addEventListener('change', e => { simTam = e.target.value; pintarSim(); });
+  document.getElementById('sim-ciudad').addEventListener('change', pintarSim);
+  document.querySelectorAll('#sim-beta button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#sim-beta button').forEach(x => x.classList.toggle('on', x === b)); HUFF.beta = +b.dataset.b; pintarSim(); }));
+}
+
+function ponerLocal(lat, lon) {
+  simPunto = [lat, lon];
+  if (!marcaSim) {
+    marcaSim = L.marker(simPunto, { draggable: true, title: 'Tu local (arrástralo)', zIndexOffset: 1000,
+      icon: L.divIcon({ className: 'pin-local', html: '<span><i>★</i></span>', iconSize: [30, 30], iconAnchor: [15, 30] }) }).addTo(mapaSim);
+    marcaSim.on('dragend', () => { const p = marcaSim.getLatLng(); simPunto = [p.lat, p.lng]; pintarSim(); });
+  } else marcaSim.setLatLng(simPunto);
+  document.getElementById('sim-ayuda').style.display = 'none';
+  pintarSim();
+}
+
+function pintarSim() {
+  const B = huffBase(simInd), ciudad = document.getElementById('sim-ciudad').checked;
+  if (capaComp) mapaSim.removeLayer(capaComp);
+  capaComp = L.layerGroup(B.comp.map((k, j) => L.circleMarker([k.lat, k.lon], { radius: 2.5 + Math.sqrt(TAM_MED[k.per] || 3) * 0.9, weight: 0.8, color: '#fff', fillColor: COL[simInd], fillOpacity: 0.9 })
+    .bindPopup(`<b>${esc(k.nombre)}</b><br>${esc(k.sub)}<br>${k.per} personas · capta unos ${fmt(Math.round(B.capt[j]))} hogares`))).addTo(mapaSim);
+  const el = document.getElementById('sim-res');
+  let res = null;
+  if (simPunto) res = huffLocal(simPunto[0], simPunto[1], simInd, simTam);
+  if (ciudad) {
+    const v = huffCiudad(simInd, simTam), q = [0.2, 0.4, 0.6, 0.8].map(x => { const o = v.filter(y => y != null).sort((a, b) => a - b); return o[Math.floor(o.length * x)]; });
+    capaSim.setStyle(f => { const k = G.features.indexOf(f); return { weight: 0.4, color: '#fffdf9', fillOpacity: 0.75, fillColor: CIU_COL(v[k], q) }; });
+    const mejores = v.map((x, k) => ({ x, k })).filter(o => o.x != null).sort((a, b) => b.x - a.x), vistas = new Set(), top = [];
+    for (const o of mejores) { const c = CEN[o.k].p.colonia || 'AGEB ' + CEN[o.k].p.clave; if (!vistas.has(c)) { vistas.add(c); top.push(o); } if (top.length === 6) break; }
+    el.innerHTML = (res ? resultadoHtml(res) : '') + `<div class="sim-bloque"><h5>Mejores puntos para un local ${document.getElementById('sim-tam').selectedOptions[0].text.split(' ·')[0].toLowerCase()}</h5><ol class="sim-top">${top.map(o =>
+      `<li data-k="${o.k}">${esc(CEN[o.k].p.colonia || 'AGEB ' + CEN[o.k].p.clave)} · ${fmt(Math.round(o.x))} hogares</li>`).join('')}</ol>
+      <p class="nota">Color del mapa: hogares que captaría el local si se abriera en el centro de cada AGEB (más oscuro = más). Da clic en un punto de la lista para probarlo.</p></div>`;
+    el.querySelectorAll('.sim-top li').forEach(li => li.addEventListener('click', () => { const c = CEN[+li.dataset.k]; ponerLocal(c.lat, c.lon); mapaSim.setView([c.lat, c.lon], 14); }));
+    return;
+  }
+  capaSim.setStyle(f => { const k = G.features.indexOf(f), c = res ? SIM_COL(res.prob[k]) : null;
+    return { weight: 0.4, color: '#fffdf9', fillOpacity: c ? 0.65 : 0, fillColor: c || '#fff' }; });
+  el.innerHTML = res ? resultadoHtml(res) : `<p class="nota">Elige la industria y el tamaño, y da clic en el mapa. Los puntos son los competidores; su tamaño indica su personal.</p>`;
+}
+
+function resultadoHtml(r) {
+  const B = huffBase(simInd), veces = r.total / B.mediana, cerca = CEN.map((c, i) => ({ i, d: km(c.lat, c.lon, simPunto[0], simPunto[1]) })).sort((a, b) => a.d - b.d)[0];
+  const pa = CEN[cerca.i].p, ip = pa[ABR[simInd] + '_ip'];
+  const col = {}; r.aporte.forEach(x => { const c = CEN[x.i].p.colonia || 'AGEB ' + CEN[x.i].p.clave; col[c] = (col[c] || 0) + x.h; });
+  const origen = Object.entries(col).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const radio = r.aporte.length ? (() => { let s = 0, o = [...r.aporte].sort((a, b) => a.d - b.d); for (const x of o) { s += x.h; if (s >= r.total * 0.8) return x.d; } return o[o.length - 1].d; })() : 0;
+  return `<div class="sim-num"><b>${fmt(Math.round(r.total / 10) * 10)}</b><span>hogares A/B y C+ captaría tu local</span></div>
+    <p class="sim-comp">${veces >= 1.15 ? `<b>${veces.toFixed(1)} veces</b> lo que capta un negocio típico de la industria` : veces <= 0.85 ? `<b>${Math.round(veces * 100)}%</b> de lo que capta un negocio típico de la industria` : 'Parecido a lo que capta un negocio típico de la industria'} (${fmt(Math.round(B.mediana))} hogares).</p>
+    <div class="sim-mini"><div><b>${Math.round(100 * r.total / Math.max(r.alcance, 1))}%</b><span>de los ${fmt(r.alcance)} hogares objetivo a 5 km</span></div><div><b>${radio.toFixed(1)} km</b><span>radio de donde viene el 80% de tus clientes</span></div></div>
+    <p class="nota">AGEB más cercana: <b>${esc(pa.colonia || 'AGEB ' + pa.clave)}</b>${ip != null ? ` · índice de potencial ${ip} de 100` : ''}</p>
+    <div class="sim-bloque"><h5>De dónde vendrían tus clientes</h5>${origen.map(([c, h]) => `<div class="sim-fila"><span>${esc(c)}</span><b>${fmt(Math.round(h))}</b></div>`).join('')}</div>
+    <div class="sim-bloque"><h5>A quién le quitarías más clientes</h5>${r.perdida.slice(0, 4).map(x => { const k = B.comp[x.j];
+      return `<div class="sim-fila"><span>${esc(k.nombre)}<small>${k.per} personas · hoy capta ${fmt(Math.round(B.capt[x.j]))}</small></span><b>−${fmt(Math.round(x.p))}</b></div>`; }).join('') || '<p class="nota">No hay competidores cerca.</p>'}</div>`;
+}
+
 /* ===================== EXPLORADOR ===================== */
 let mapa, capaAgeb, capaPuntos;
 const NSE_COL = { 'A/B': '#1f3d33', 'C+': '#3f6b55', 'C': '#8fb09b', 'C-': '#d5e2d6', 'D+': '#f0d9b5', 'D': '#dba26b', 'E': '#b5543c', 'Sin dato': '#eeeeee' };
@@ -466,6 +589,7 @@ function pintar() {
   if (vista === 'modelo') { cifrasPotencial(); pesosPotencial(); mapaPotencial(); mejoresPotencial(); validacionPotencial(); }
   if (vista === 'explorador') { if (!mapa) iniciarMapa(); mapa.invalidateSize(); actualizarMapa(); }
   if (vista === 'clientes') personas();
+  if (vista === 'simulador') { if (!mapaSim) iniciarSim(); else mapaSim.invalidateSize(); pintarSim(); }
 }
 function ir(v, inicio) {
   if (!document.getElementById('v-' + v)) v = 'decision';

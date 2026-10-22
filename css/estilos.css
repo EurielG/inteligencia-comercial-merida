@@ -252,3 +252,33 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .ip-fac i { display: block; height: 7px; background: #efe8db; border-radius: 4px; overflow: hidden; }
 .ip-fac em { display: block; height: 100%; background: #4f9a6b; }
 @media (max-width: 960px) { .pesos { grid-template-columns: 1fr 1fr; } .mapa-envoltura.ip #mapa-ip { height: 420px; } }
+
+/* Simulador de local (Huff) */
+.sim { display: grid; grid-template-columns: 1fr 340px; gap: 16px; margin-bottom: 20px; }
+.sim-mapa { position: relative; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--linea); }
+#mapa-sim { height: 680px; cursor: crosshair; }
+.sim-ayuda { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 500; background: #1f3d33; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; margin: 0; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.sim-panel { background: var(--papel); border: 1px solid var(--linea); border-radius: var(--radio); padding: 16px; max-height: 680px; overflow-y: auto; }
+.sim-panel select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--linea); font: inherit; margin-bottom: 10px; background: #fff; }
+.sim-panel .selector-tit { color: var(--tinta-2); margin: 6px 0; }
+.sim-num { background: #1f3d33; color: #fff; border-radius: 12px; padding: 14px 16px; margin: 10px 0 8px; }
+.sim-num b { display: block; font-family: 'Fraunces', serif; font-size: 40px; line-height: 1; }
+.sim-num span { font-size: 13px; opacity: .85; }
+.sim-comp { font-size: 13px; margin: 0 0 10px; }
+.sim-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.sim-mini div { background: var(--crema); border-radius: 8px; padding: 8px; }
+.sim-mini b { display: block; font-size: 18px; }
+.sim-mini span { font-size: 11px; color: var(--tinta-2); }
+.sim-bloque { border-top: 1px solid var(--linea); padding-top: 8px; margin-top: 8px; }
+.sim-bloque h5 { margin: 0 0 6px; font-size: 13px; }
+.sim-fila { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; margin: 3px 0; }
+.sim-fila small { display: block; color: var(--tinta-2); font-size: 11px; }
+.sim-top { margin: 0; padding-left: 18px; font-size: 13px; }
+.sim-top li { cursor: pointer; margin-bottom: 3px; }
+.sim-top li:hover { color: var(--terracota); }
+.pasos { padding-left: 20px; font-size: 14px; }
+.pasos li { margin-bottom: 6px; }
+@media (max-width: 960px) { .sim { grid-template-columns: 1fr; } #mapa-sim { height: 460px; } .sim-panel { max-height: none; } }
+.pin-local span { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: #e0a526; border: 2px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.35); color: #1f3d33; font-size: 15px; }
+.pin-local i { transform: rotate(45deg); font-style: normal; }

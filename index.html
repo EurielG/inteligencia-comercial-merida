@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261022c">
+  <link rel="stylesheet" href="css/estilos.css?v=20261023a">
 </head>
 <body>
 <div class="app">
@@ -36,6 +36,7 @@
       <a href="#voz" data-v="voz"><b>04</b><span>Voz del cliente<small>5,220 reseñas</small></span></a>
       <a href="#modelo" data-v="modelo"><b>05</b><span>Índice de potencial<small>Dónde le iría mejor</small></span></a>
       <p class="selector-tit mt-s">Herramientas</p>
+      <a href="#simulador" data-v="simulador"><b>✚</b><span>Simulador de local<small>Modelo de Huff</small></span></a>
       <a href="#explorador" data-v="explorador"><b>◎</b><span>Explorador territorial<small>Mapa por AGEB</small></span></a>
       <a href="#clientes" data-v="clientes"><b>☺</b><span>Clientes tipo<small>6 user personas</small></span></a>
       <a href="#metodo" data-v="metodo"><b>✎</b><span>Cómo lo hicimos<small>Datos y límites</small></span></a>
@@ -204,6 +205,7 @@
       </div>
       <div class="caja">
         <div class="fila-tit"><h3>Mapa de potencial</h3><p class="nota" id="ip-industria"></p></div>
+        <p class="nota"><a class="ir" href="#simulador" style="margin:0">Probar un local concreto en el simulador de Huff →</a></p>
         <div class="mapa-envoltura ip">
           <div id="mapa-ip"></div>
           <div class="mapa-panel"><div id="leyenda-ip" class="leyenda"></div><div id="mejores-potencial"></div></div>
@@ -226,6 +228,58 @@
           <li><b>Rentas, tráfico y visibilidad del local</b> · no hay datos públicos por AGEB.</li>
           <li><b>Empresas como clientes</b> · en servicios profesionales el cliente principal son las empresas; el puntaje solo cuenta hogares.</li>
         </ul>
+      </div>
+    </section>
+
+    <!-- SIMULADOR DE LOCAL (HUFF) -->
+    <section class="vista" id="v-simulador">
+      <header class="cabeza">
+        <p class="kicker">Herramienta · Simulador de local</p>
+        <h1>¿Cuántos clientes captaría tu local?</h1>
+        <p class="bajada">Da clic en el mapa para poner un negocio. El modelo de Huff calcula qué parte de los hogares de nivel A/B y C+ de alrededor iría a tu local y no a la competencia, según la distancia y el tamaño de cada competidor.</p>
+      </header>
+      <div class="sim">
+        <div class="sim-mapa"><div id="mapa-sim"></div><p class="sim-ayuda" id="sim-ayuda">Da clic en cualquier punto del mapa para poner tu local. Después puedes arrastrarlo.</p></div>
+        <aside class="sim-panel">
+          <p class="selector-tit">Industria</p>
+          <div class="segmentado vertical" id="sim-ind">
+            <button data-i="Fitness y deporte">Fitness y deporte</button>
+            <button data-i="Servicios para mascotas" class="on">Servicios para mascotas</button>
+            <button data-i="Servicios profesionales">Servicios profesionales</button>
+          </div>
+          <p class="selector-tit">Tamaño del local</p>
+          <select id="sim-tam">
+            <option value="0 a 5">Chico · hasta 5 personas</option>
+            <option value="6 a 10" selected>Mediano · 6 a 10 personas</option>
+            <option value="11 a 30">Grande · 11 a 30 personas</option>
+            <option value="31 a 50">Muy grande · 31 a 50 personas</option>
+          </select>
+          <label class="check"><input type="checkbox" id="sim-ciudad"> Ver la captación en toda la ciudad</label>
+          <div id="sim-res" class="sim-res"></div>
+        </aside>
+      </div>
+      <div class="rejilla-2">
+        <div class="caja">
+          <h3>Cómo funciona</h3>
+          <p class="nota">Modelo de Huff (1963), el método clásico para estimar la captación de un local comercial.</p>
+          <ol class="pasos">
+            <li>Cada AGEB es un grupo de clientes: sus hogares A/B y C+ viven en su centro.</li>
+            <li>Para cada AGEB, cada local tiene un atractivo: <b>tamaño<sup>0.5</sup> ÷ distancia<sup>2</sup></b>. Un local el doble de lejos atrae 4 veces menos; uno 4 veces más grande atrae el doble.</li>
+            <li>La probabilidad de que los hogares de esa AGEB elijan tu local es tu atractivo entre la suma del atractivo de todos los locales a 5 km o menos.</li>
+            <li>Los clientes captados son la suma, en todas las AGEB, de hogares × probabilidad.</li>
+          </ol>
+          <details><summary>Ajustes del modelo</summary>
+            <p class="nota">Qué tanto pesa la distancia. Con más peso, la gente prefiere el local más cercano aunque sea chico.</p>
+            <div class="segmentado" id="sim-beta"><button data-b="1.5">Poco (1.5)</button><button data-b="2" class="on">Normal (2)</button><button data-b="2.5">Mucho (2.5)</button></div>
+          </details>
+        </div>
+        <div class="caja">
+          <h3>Lo que hay que saber</h3>
+          <details><summary>Los parámetros son supuestos</summary><p>El exponente de la distancia (2) y el del tamaño (0.5) son valores habituales en la literatura del modelo de Huff. No los calibramos con visitas reales porque no hay datos públicos de a qué local va cada hogar. Por eso puedes cambiar el peso de la distancia y ver qué tanto cambia el resultado.</p></details>
+          <details><summary>El tamaño se mide con el personal</summary><p>El DENUE no trae metros cuadrados ni ventas; el atractivo de cada competidor se aproxima con su personal ocupado (punto medio del rango). La raíz cuadrada evita que un club con 250 empleados, que incluye restaurante y alberca, opaque a todos los demás.</p></details>
+          <details><summary>Solo cuenta hogares A/B y C+</summary><p>Es el cliente ideal de las etapas anteriores. En servicios profesionales el cliente principal son las empresas, así que el resultado subestima su mercado.</p></details>
+          <details><summary>Todos los hogares van a algún local</summary><p>El modelo reparte a los hogares entre los locales que tienen a 5 km o menos. No estima cuántos hogares no van a ninguno; por eso conviene leer el resultado como clientes potenciales.</p></details>
+        </div>
       </div>
     </section>
 
@@ -277,6 +331,7 @@
         <li><b>Competencia</b><p>Índice Herfindahl-Hirschman y CR4 por subcategoría, sumando las sucursales de una misma empresa y midiendo su tamaño con personal ocupado. Hogares de nivel A/B y C+ por negocio en un radio de 1.5 km, comprobado con 1 y 2 km.</p></li>
         <li><b>Voz del cliente</b><p>Modelo pysentimiento (RoBERTuito) para cada reseña, con corrección para reseñas de 5 palabras o menos; validación contra las estrellas (89.9%); temas por palabras clave; nubes de palabras y TF-IDF.</p></li>
         <li><b>Índice de potencial</b><p>Puntaje de 0 a 100 por AGEB que suma, en percentiles de la ciudad, la competencia (35%), la demanda de hogares A/B y C+ (30%), el crecimiento de la actividad comercial (20%) y el nivel socioeconómico (15%). Se probó contra pesos iguales, contra las zonas de la Etapa 3 y contra la supervivencia de los negocios 2024-2026.</p></li>
+        <li><b>Simulador de local</b><p>Modelo de Huff: cada hogar A/B y C+ reparte su preferencia entre los locales a 5 km o menos según tamaño<sup>0.5</sup> ÷ distancia<sup>2</sup>, con el tamaño medido por el personal ocupado del DENUE. Los clientes captados son la suma de hogares × probabilidad.</p></li>
       </ol>
       <div class="rejilla-2">
         <div class="caja"><h3>Fuentes</h3>
@@ -305,10 +360,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
-<script src="data/resultados.js?v=20261022c"></script>
-<script src="data/negocios.js?v=20261022c"></script>
-<script src="data/agebs.js?v=20261022c"></script>
-<script src="data/personas.js?v=20261022c"></script>
-<script src="js/app.js?v=20261022c"></script>
+<script src="data/resultados.js?v=20261023a"></script>
+<script src="data/negocios.js?v=20261023a"></script>
+<script src="data/agebs.js?v=20261023a"></script>
+<script src="data/personas.js?v=20261023a"></script>
+<script src="js/app.js?v=20261023a"></script>
 </body>
 </html>
