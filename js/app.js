@@ -338,6 +338,111 @@ function validacionPotencial() {
     filas.map(([t, f]) => `<tr><td>${t}</td>${sel.map(i => `<td>${f(PT.industrias[i])}</td>`).join('')}</tr>`).join('');
 }
 
+/* ===================== MAPA 3D (deck.gl + MapLibre, se cargan al abrir la vista) ===================== */
+const CB = window.CAMBIOS;
+const LIBS_3D = ['https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js', 'https://unpkg.com/deck.gl@9.0.38/dist.min.js'];
+let m3Ind = 'Servicios para mascotas', m3Modo = 'zonas', m3Alt = 'negocios', m3Ver = { aparecio: true, desaparecio: true }, mapa3d, capa3d, libs3d;
+const cargarScript = u => new Promise((ok, mal) => { const s = document.createElement('script'); s.src = u; s.onload = ok; s.onerror = mal; document.head.appendChild(s); });
+function cargarLibs3d() {
+  if (!libs3d) {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css'; document.head.appendChild(css);
+    libs3d = LIBS_3D.reduce((p, u) => p.then(() => cargarScript(u)), Promise.resolve());
+  }
+  return libs3d;
+}
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const ESCALA_3D = ['#f3ecd9', '#d9e4b8', '#9cc79a', '#4f9a6b', '#1f6f50', '#1f3d33'].map(hexRgb);
+function colorEscala(t) {
+  if (t == null || isNaN(t)) return [225, 220, 210, 120];
+  const x = Math.max(0, Math.min(1, t)) * (ESCALA_3D.length - 1), i = Math.min(Math.floor(x), ESCALA_3D.length - 2), f = x - i;
+  return ESCALA_3D[i].map((c, k) => Math.round(c + (ESCALA_3D[i + 1][k] - c) * f)).concat(235);
+}
+const ALTURAS = {
+  negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => p.mix[MIX.indexOf(m3Ind)], fmt: v => `${v} negocios` },
+  objetivo: { nombre: 'Hogares A/B y C+ en la AGEB', valor: p => p.objetivo, fmt: v => `${fmt(v)} hogares A/B y C+` },
+  potencial: { nombre: 'Índice de potencial', valor: p => p[ABR[m3Ind] + '_ip'], fmt: v => `índice ${v} de 100` },
+};
+
+function iniciar3d() {
+  document.getElementById('m3-cargando').style.display = 'block';
+  cargarLibs3d().then(() => {
+    document.getElementById('m3-cargando').style.display = 'none';
+    mapa3d = new maplibregl.Map({
+      container: 'mapa-3d', center: [-89.62, 20.99], zoom: 11.3, pitch: 50, bearing: -15, maxPitch: 70,
+      style: { version: 8, sources: { base: { type: 'raster', tileSize: 256, attribution: 'Mapa base © Esri, HERE, Garmin, © OpenStreetMap',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'] } },
+        layers: [{ id: 'base', type: 'raster', source: 'base' }] },
+    });
+    mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
+    capa3d = new deck.MapboxOverlay({ layers: [], getTooltip: tooltip3d });
+    mapa3d.addControl(capa3d);
+    document.getElementById('m3-incl').onclick = () => mapa3d.easeTo({ pitch: 55, bearing: -20, duration: 900 });
+    document.getElementById('m3-plano').onclick = () => mapa3d.easeTo({ pitch: 0, bearing: 0, duration: 900 });
+    pintar3d();
+  }).catch(() => { document.getElementById('m3-cargando').textContent = 'No se pudo cargar el mapa 3D. Revisa tu conexión y recarga la página.'; });
+}
+
+function tooltip3d({ object, layer }) {
+  if (!object) return null;
+  const caja = h => ({ html: h, style: { background: '#fffdf9', color: '#1f2a24', fontSize: '12px', borderRadius: '8px', padding: '8px 10px', boxShadow: '0 4px 14px rgba(0,0,0,.18)' } });
+  if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
+    return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
+      `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
+  if (layer.id === 'hex') return caja(`<b>${object.points ? object.points.length : object.count} negocios</b> de ${CORTO[m3Ind]}<br>en este hexágono (unos 700 m de lado a lado)`);
+  if (layer.id === 'cambios') return caja(`<b>${esc(object[4])}</b><br>${object[3] === 0 ? '🟢 Apareció entre 2024 y 2026' : '🔴 Ya no aparece en 2026'}<br>${object[5]} personas`);
+  return null;
+}
+
+function opciones3d() {
+  const el = document.getElementById('m3-opciones');
+  if (m3Modo === 'zonas') {
+    el.innerHTML = `<p class="selector-tit">Altura y color</p><select id="m3-alt">${Object.entries(ALTURAS).map(([k, v]) => `<option value="${k}" ${k === m3Alt ? 'selected' : ''}>${v.nombre}</option>`).join('')}</select>`;
+    el.querySelector('#m3-alt').onchange = e => { m3Alt = e.target.value; pintar3d(); };
+  } else if (m3Modo === 'cambios') {
+    el.innerHTML = `<p class="selector-tit">Mostrar</p><label class="check"><input type="checkbox" id="m3-ap" ${m3Ver.aparecio ? 'checked' : ''}> <span class="punto" style="background:#2f9e5b"></span>Aparecieron</label>` +
+      `<label class="check"><input type="checkbox" id="m3-des" ${m3Ver.desaparecio ? 'checked' : ''}> <span class="punto" style="background:#c2412d"></span>Desaparecieron</label>`;
+    el.querySelector('#m3-ap').onchange = e => { m3Ver.aparecio = e.target.checked; pintar3d(); };
+    el.querySelector('#m3-des').onchange = e => { m3Ver.desaparecio = e.target.checked; pintar3d(); };
+  } else el.innerHTML = '';
+}
+
+function pintar3d() {
+  if (!mapa3d) return;
+  opciones3d();
+  const ii = INDS.indexOf(m3Ind), ley = document.getElementById('m3-leyenda'), info = document.getElementById('m3-info');
+  let capas = [];
+  if (m3Modo === 'zonas') {
+    const A3 = ALTURAS[m3Alt], vals = G.features.map(f => A3.valor(f.properties)).filter(v => v != null), max = Math.max(...vals, 1);
+    const orden = [...vals].sort((a, b) => a - b), q = v => (v == null ? null : orden.findIndex(x => x >= v) / Math.max(orden.length - 1, 1));
+    capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G, extruded: true, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
+      getElevation: f => { const v = A3.valor(f.properties); return v == null ? 0 : 40 + 2600 * v / max; },
+      getFillColor: f => colorEscala(q(A3.valor(f.properties))), getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3,
+      material: { ambient: 0.55, diffuse: 0.6, shininess: 20 }, updateTriggers: { getElevation: [m3Alt, m3Ind], getFillColor: [m3Alt, m3Ind] } })];
+    ley.innerHTML = `<p class="nota"><b>${A3.nombre}</b> · ${CORTO[m3Ind]}<br>Más alta y más oscura = mayor valor. El color compara cada AGEB con el resto de la ciudad.</p>` +
+      `<div class="m3-grad"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>`;
+    const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
+    const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
+    info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
+  } else if (m3Modo === 'hex') {
+    const pts = N.filas.filter(f => f[2] === ii);
+    capas = [new deck.HexagonLayer({ id: 'hex', data: pts, getPosition: f => [f[1], f[0]], radius: 400, extruded: true, pickable: true, autoHighlight: true,
+      elevationRange: [0, 2800], elevationScale: 1, coverage: 0.88, upperPercentile: 100,
+      colorRange: ['#f3ecd9', '#d9e4b8', '#9cc79a', '#4f9a6b', '#1f6f50', '#1f3d33'].map(hexRgb), material: { ambient: 0.55, diffuse: 0.6 } })];
+    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]} por hexágono</b><br>Cada columna junta los negocios a unos 400 m a la redonda. Las torres altas son las zonas más saturadas.</p><div class="m3-grad"></div><div class="m3-grad-et"><span>Pocos</span><span>Muchos</span></div>`;
+    info.innerHTML = `<p class="nota">${fmt(pts.length)} negocios de ${m3Ind} en el DENUE 2026.</p>`;
+  } else {
+    const filas = CB.filas.filter(f => f[2] === ii), ap = filas.filter(f => f[3] === 0).length, des = filas.length - ap;
+    const ver = filas.filter(f => (f[3] === 0 && m3Ver.aparecio) || (f[3] === 1 && m3Ver.desaparecio));
+    capas = [new deck.ColumnLayer({ id: 'cambios', data: ver, getPosition: f => [f[1], f[0]], radius: 55, diskResolution: 12, extruded: true, pickable: true, autoHighlight: true,
+      getElevation: f => 250 + 120 * Math.sqrt(TAM_MED[f[5]] || 3), getFillColor: f => (f[3] === 0 ? [47, 158, 91, 230] : [194, 65, 45, 230]),
+      updateTriggers: { getFillColor: [m3Ind] } })];
+    ley.innerHTML = `<p class="nota">Cada columna es un negocio; la altura indica su tamaño (personal).</p>`;
+    info.innerHTML = `<div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
+      `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p>`;
+  }
+  capa3d.setProps({ layers: capas });
+}
+
 /* ===================== SIMULADOR DE LOCAL (MODELO DE HUFF) ===================== */
 // Probabilidad de que los hogares de la AGEB i elijan el local j: (A_j^alfa / d_ij^beta) / suma_k (A_k^alfa / d_ik^beta),
 // con k = todos los locales de la industria a dmax km o menos. A = personal ocupado (punto medio del rango del DENUE).
@@ -589,6 +694,7 @@ function pintar() {
   if (vista === 'modelo') { cifrasPotencial(); pesosPotencial(); mapaPotencial(); mejoresPotencial(); validacionPotencial(); }
   if (vista === 'explorador') { if (!mapa) iniciarMapa(); mapa.invalidateSize(); actualizarMapa(); }
   if (vista === 'clientes') personas();
+  if (vista === 'mapa3d') { if (!mapa3d && !libs3d) iniciar3d(); else if (mapa3d) { mapa3d.resize(); pintar3d(); } }
   if (vista === 'simulador') { if (!mapaSim) iniciarSim(); else mapaSim.invalidateSize(); pintarSim(); }
 }
 function ir(v, inicio) {
@@ -613,5 +719,9 @@ document.querySelectorAll('#seg-nube button').forEach(b => b.addEventListener('c
 document.querySelectorAll('#seg-ej button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('#seg-ej button').forEach(x => x.classList.toggle('on', x === b)); sentEj = b.dataset.s; ejemplos(); }));
 document.getElementById('buscar').addEventListener('input', ejemplos);
+document.querySelectorAll('#m3-ind button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#m3-ind button').forEach(x => x.classList.toggle('on', x === b)); m3Ind = b.dataset.i; pintar3d(); }));
+document.querySelectorAll('#m3-modo button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#m3-modo button').forEach(x => x.classList.toggle('on', x === b)); m3Modo = b.dataset.m; pintar3d(); }));
 
 ir((location.hash || '#decision').slice(1), true);

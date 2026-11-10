@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261023a">
+  <link rel="stylesheet" href="css/estilos.css?v=20261110b">
 </head>
 <body>
 <div class="app">
@@ -36,6 +36,7 @@
       <a href="#voz" data-v="voz"><b>04</b><span>Voz del cliente<small>5,220 reseñas</small></span></a>
       <a href="#modelo" data-v="modelo"><b>05</b><span>Índice de potencial<small>Dónde le iría mejor</small></span></a>
       <p class="selector-tit mt-s">Herramientas</p>
+      <a href="#mapa3d" data-v="mapa3d"><b>▲</b><span>Mapa 3D<small>Zonas, negocios y cambios</small></span></a>
       <a href="#simulador" data-v="simulador"><b>✚</b><span>Simulador de local<small>Modelo de Huff</small></span></a>
       <a href="#explorador" data-v="explorador"><b>◎</b><span>Explorador territorial<small>Mapa por AGEB</small></span></a>
       <a href="#clientes" data-v="clientes"><b>☺</b><span>Clientes tipo<small>6 user personas</small></span></a>
@@ -231,6 +232,37 @@
       </div>
     </section>
 
+    <!-- MAPA 3D -->
+    <section class="vista" id="v-mapa3d">
+      <header class="cabeza">
+        <p class="kicker">Herramienta · Mapa 3D</p>
+        <h1>Mérida en tres dimensiones</h1>
+        <p class="bajada">La altura muestra dónde hay más negocios, más clientes o más potencial. Gira e inclina el mapa: clic derecho y arrastra (o Ctrl + arrastrar). Pasa el cursor sobre una zona para ver sus datos.</p>
+      </header>
+      <div class="sim">
+        <div class="sim-mapa"><div id="mapa-3d"></div>
+          <div class="m3-botones"><button id="m3-incl">Vista 3D</button><button id="m3-plano">Desde arriba</button></div>
+          <p class="sim-ayuda" id="m3-cargando">Cargando el mapa 3D…</p></div>
+        <aside class="sim-panel">
+          <p class="selector-tit">Industria</p>
+          <div class="segmentado vertical" id="m3-ind">
+            <button data-i="Fitness y deporte">Fitness y deporte</button>
+            <button data-i="Servicios para mascotas" class="on">Servicios para mascotas</button>
+            <button data-i="Servicios profesionales">Servicios profesionales</button>
+          </div>
+          <p class="selector-tit">Qué ver</p>
+          <div class="segmentado vertical" id="m3-modo">
+            <button data-m="zonas" class="on">Zonas (AGEB) en 3D</button>
+            <button data-m="hex">Concentración de negocios</button>
+            <button data-m="cambios">Cambios 2024 → 2026</button>
+          </div>
+          <div id="m3-opciones"></div>
+          <div id="m3-leyenda" class="leyenda"></div>
+          <div id="m3-info" class="m3-info"></div>
+        </aside>
+      </div>
+    </section>
+
     <!-- SIMULADOR DE LOCAL (HUFF) -->
     <section class="vista" id="v-simulador">
       <header class="cabeza">
@@ -360,10 +392,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
-<script src="data/resultados.js?v=20261023a"></script>
-<script src="data/negocios.js?v=20261023a"></script>
-<script src="data/agebs.js?v=20261023a"></script>
-<script src="data/personas.js?v=20261023a"></script>
-<script src="js/app.js?v=20261023a"></script>
+<script src="data/resultados.js?v=20261110b"></script>
+<script src="data/negocios.js?v=20261110b"></script>
+<script src="data/agebs.js?v=20261110b"></script>
+<script src="data/cambios.js?v=20261110b"></script>
+<script src="data/personas.js?v=20261110b"></script>
+<script src="js/app.js?v=20261110b"></script>
 </body>
 </html>

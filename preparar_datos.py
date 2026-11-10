@@ -239,6 +239,17 @@ llave = lambda d: d['nom_estab'].astype(str).str.upper().str.replace(r'[^A-Z0-9]
 B = d24[d24['industria'].isin(FOCO)].dropna(subset=['lat', 'lon']).copy()
 B['vive'] = (B['id'].isin(d26['id']) | llave(B).isin(set(llave(d26)))).astype(int)
 
+# Cambios 2024 -> 2026 para el mapa 3D: negocios de las 3 industrias que aparecieron (no estaban en 2024 ni con el mismo id
+# ni con el mismo nombre y actividad) y los que desaparecieron (B con vive == 0)
+k24 = set(llave(d24))
+nuevos = d26[d26['industria'].isin(FOCO) & ~d26['id'].isin(d24['id']) & ~llave(d26).isin(k24)].dropna(subset=['lat', 'lon'])
+idos = B[B['vive'] == 0]
+cambios = {'campos': ['lat', 'lon', 'industria', 'tipo', 'nombre', 'personal'], 'industrias': FOCO, 'tipos': ['aparecio', 'desaparecio'],
+           'filas': [[round(a, 5), round(b, 5), FOCO.index(i), t, str(n).title()[:60], str(p).replace(' personas', '')]
+                     for df, t in ((nuevos, 0), (idos, 1))
+                     for a, b, i, n, p in zip(df['lat'], df['lon'], df['industria'], df['nom_estab'], df['per_ocu'])]}
+print('Cambios 2024-2026:', {i: (int((nuevos.industria == i).sum()), int((idos.industria == i).sum())) for i in FOCO})
+
 PESOS = {'competencia': .35, 'demanda': .30, 'crecimiento': .20, 'nivel': .15}
 FACT = list(PESOS)
 percentil = lambda v: pd.Series(v).rank(pct=True).values
@@ -402,6 +413,7 @@ resultados = {
 }
 json.dump(resultados, open(os.path.join(OUT, 'resultados.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 json.dump(negocios, open(os.path.join(OUT, 'negocios.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
+json.dump(cambios, open(os.path.join(OUT, 'cambios.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 for f in os.listdir(OUT):
     print(f, round(os.path.getsize(os.path.join(OUT, f)) / 1024), 'KB')
 
@@ -427,7 +439,7 @@ json.dump(personas, open(os.path.join(OUT, 'personas.json'), 'w'), ensure_ascii=
 print('Personas:', [p['nombre'] for p in personas])
 
 # Copias en .js para que la página funcione también abriendo index.html con doble clic (sin servidor)
-for nombre, var in [('resultados.json', 'RESULTADOS'), ('negocios.json', 'NEGOCIOS'), ('agebs.geojson', 'AGEBS'), ('personas.json', 'PERSONAS')]:
+for nombre, var in [('resultados.json', 'RESULTADOS'), ('negocios.json', 'NEGOCIOS'), ('agebs.geojson', 'AGEBS'), ('personas.json', 'PERSONAS'), ('cambios.json', 'CAMBIOS')]:
     with open(os.path.join(OUT, nombre)) as f, open(os.path.join(OUT, nombre.split('.')[0] + '.js'), 'w') as g:
         g.write(f'window.{var} = ' + f.read() + ';\n')
 print('Archivos .js listos')

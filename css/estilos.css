@@ -282,3 +282,17 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .pin-local span { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
   background: #e0a526; border: 2px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.35); color: #1f3d33; font-size: 15px; }
 .pin-local i { transform: rotate(45deg); font-style: normal; }
+
+/* Mapa 3D */
+#mapa-3d { height: 680px; }
+.m3-botones { position: absolute; right: 12px; top: 12px; z-index: 5; display: flex; gap: 6px; }
+.m3-botones button { background: #fffdf9; border: 1px solid var(--linea); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.m3-botones button:hover { background: var(--crema); }
+#m3-cargando { display: none; }
+.m3-grad { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #f3ecd9, #d9e4b8, #9cc79a, #4f9a6b, #1f6f50, #1f3d33); margin-top: 4px; }
+.m3-grad-et { display: flex; justify-content: space-between; font-size: 11px; color: var(--tinta-2); }
+.m3-info { border-top: 1px solid var(--linea); margin-top: 10px; padding-top: 8px; font-size: 13px; }
+.m3-info h5 { margin: 0 0 4px; }
+.m3-info ol { margin: 0; padding-left: 18px; }
+#m3-opciones select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--linea); font: inherit; background: #fff; margin-bottom: 8px; }
+@media (max-width: 960px) { #mapa-3d { height: 460px; } }
