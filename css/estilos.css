@@ -301,5 +301,6 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .m3-tiempo button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: #1f3d33; color: #fff; cursor: pointer; font-size: 12px; }
 .m3-hist { display: flex; align-items: flex-end; gap: 2px; height: 52px; margin: 8px 0 2px; }
 .m3-hist i { flex: 1; background: #d8d1c4; border-radius: 2px 2px 0 0; }
+.m3-hist i.pasado { background: #8fa79a; }
 .m3-hist i.on { background: #e0a526; }
 .m3-dorado { color: #e0a526; }

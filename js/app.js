@@ -454,18 +454,22 @@ function pintar3d() {
     const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
     info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
   } else if (m3Modo === 'tiempo') {
-    const pts = N.filas.filter(f => f[2] === ii), anio = f => +f[7].slice(0, 4);
+    // Ordenados por fecha de registro: así los negocios de cada año nuevo se agregan al final y la animación solo hace crecer a esos
+    const anio = f => +f[7].slice(0, 4), pts = N.filas.filter(f => f[2] === ii).sort((x, y) => (x[7] < y[7] ? -1 : x[7] > y[7] ? 1 : 0));
     const ver = pts.filter(f => anio(f) <= m3Anio), nuevos = ver.filter(f => anio(f) === m3Anio).length;
     capas = [new deck.ColumnLayer({ id: 'negocio', data: ver, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
-      getElevation: f => (anio(f) === m3Anio ? 1.8 : 1) * (60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3)),
-      getFillColor: f => (anio(f) === m3Anio ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(200)),
-      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Anio, m3Ind], getElevation: [m3Anio] }, transitions: { getElevation: 400 } })];
-    const porAnio = {}; pts.forEach(f => { porAnio[anio(f)] = (porAnio[anio(f)] || 0) + 1; });
-    const maxA = Math.max(...Object.values(porAnio));
-    ley.innerHTML = `<p class="nota"><b>Fecha de registro en el DENUE</b> · ${CORTO[m3Ind]}<br><span class="m3-dorado">■</span> registrados en ${m3Anio} · <span style="color:${COL[m3Ind]}">■</span> registrados antes</p>`;
-    info.innerHTML = `<div class="sim-mini"><div><b>${fmt(ver.length)}</b><span>negocios registrados hasta ${m3Anio}</span></div><div><b>+${fmt(nuevos)}</b><span>registrados en ${m3Anio}</span></div></div>` +
-      `<div class="m3-hist">${Array.from({ length: 17 }, (_, k) => 2010 + k).map(a => `<i title="${a}: ${porAnio[a] || 0}" class="${a === m3Anio ? 'on' : ''}" style="height:${4 + 46 * (porAnio[a] || 0) / maxA}px"></i>`).join('')}</div>` +
-      `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
+      getElevation: f => 60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3),
+      getFillColor: f => (anio(f) === m3Anio ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(235)),
+      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Anio, m3Ind] },
+      transitions: { getElevation: { duration: 700, enter: () => [0] } } })];
+    const acum = Array.from({ length: 17 }, (_, k) => pts.filter(f => anio(f) <= 2010 + k).length), maxA = acum[16] || 1;
+    ley.innerHTML = `<p class="nota"><b>Negocios acumulados</b> de ${CORTO[m3Ind]} según su fecha de registro en el DENUE. Los de años anteriores se quedan en el mapa y cada año se suman los nuevos.<br>` +
+      `<span class="m3-dorado">■</span> se suman en ${m3Anio} · <span style="color:${COL[m3Ind]}">■</span> ya estaban</p>`;
+    info.innerHTML = `<div class="sim-mini"><div><b>${fmt(ver.length)}</b><span>negocios en el mapa en ${m3Anio}</span></div><div><b>+${fmt(nuevos)}</b><span>se suman en ${m3Anio}</span></div></div>` +
+      `<p class="selector-tit" style="margin:8px 0 0">Acumulado por año</p>` +
+      `<div class="m3-hist">${acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
+      `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
+      `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años y casi nada entre ellos. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
   } else if (m3Modo === 'negocios') {
     const pts = N.filas.filter(f => f[2] === ii);
     capas = [new deck.ColumnLayer({ id: 'negocio', data: pts, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
