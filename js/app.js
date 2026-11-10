@@ -357,6 +357,14 @@ function colorEscala(t) {
   const x = Math.max(0, Math.min(1, t)) * (ESCALA_3D.length - 1), i = Math.min(Math.floor(x), ESCALA_3D.length - 2), f = x - i;
   return ESCALA_3D[i].map((c, k) => Math.round(c + (ESCALA_3D[i + 1][k] - c) * f)).concat(235);
 }
+// Cada AGEB se encoge un poco hacia su centro para que entre bloque y bloque se vean las calles del mapa base
+function encoger(f, k = 0.82) {
+  const g = f.geometry, anillos = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  const todos = anillos.flatMap(p => p[0]), cx = todos.reduce((a, c) => a + c[0], 0) / todos.length, cy = todos.reduce((a, c) => a + c[1], 0) / todos.length;
+  const nuevo = anillos.map(p => p.map(r => r.map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k])));
+  return { ...f, geometry: { type: 'MultiPolygon', coordinates: nuevo } };
+}
+let G_ENC = null;
 const ALTURAS = {
   negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => p.mix[MIX.indexOf(m3Ind)], fmt: v => `${v} negocios` },
   objetivo: { nombre: 'Hogares A/B y C+ en la AGEB', valor: p => p.objetivo, fmt: v => `${fmt(v)} hogares A/B y C+` },
@@ -369,9 +377,7 @@ function iniciar3d() {
     document.getElementById('m3-cargando').style.display = 'none';
     mapa3d = new maplibregl.Map({
       container: 'mapa-3d', center: [-89.62, 20.99], zoom: 11.3, pitch: 50, bearing: -15, maxPitch: 70,
-      style: { version: 8, sources: { base: { type: 'raster', tileSize: 256, attribution: 'Mapa base © Esri, HERE, Garmin, © OpenStreetMap',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'] } },
-        layers: [{ id: 'base', type: 'raster', source: 'base' }] },
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
     });
     mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
     capa3d = new deck.MapboxOverlay({ layers: [], getTooltip: tooltip3d });
@@ -388,7 +394,8 @@ function tooltip3d({ object, layer }) {
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
-  if (layer.id === 'hex') return caja(`<b>${object.points ? object.points.length : object.count} negocios</b> de ${CORTO[m3Ind]}<br>en este hexágono (unos 700 m de lado a lado)`);
+  if (layer.id === 'negocio') return caja(`<b>${esc(object[4])}</b><br>${esc(N.subcategorias[object[3]])}<br>${object[5]} personas · zona ${object[6]}`);
+  if (layer.id === 'hex') return caja(`<b>${object.points ? object.points.length : object.count} negocios</b> de ${CORTO[m3Ind]}<br>en este hexágono (unos 500 m de lado a lado)`);
   if (layer.id === 'cambios') return caja(`<b>${esc(object[4])}</b><br>${object[3] === 0 ? '🟢 Apareció entre 2024 y 2026' : '🔴 Ya no aparece en 2026'}<br>${object[5]} personas`);
   return null;
 }
@@ -414,8 +421,9 @@ function pintar3d() {
   if (m3Modo === 'zonas') {
     const A3 = ALTURAS[m3Alt], vals = G.features.map(f => A3.valor(f.properties)).filter(v => v != null), max = Math.max(...vals, 1);
     const orden = [...vals].sort((a, b) => a - b), q = v => (v == null ? null : orden.findIndex(x => x >= v) / Math.max(orden.length - 1, 1));
-    capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G, extruded: true, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
-      getElevation: f => { const v = A3.valor(f.properties); return v == null ? 0 : 40 + 2600 * v / max; },
+    if (!G_ENC) G_ENC = { type: 'FeatureCollection', features: G.features.map(f => encoger(f)) };
+    capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.85, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
+      getElevation: f => { const v = A3.valor(f.properties); return v == null ? 0 : 20 + 1500 * v / max; },
       getFillColor: f => colorEscala(q(A3.valor(f.properties))), getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3,
       material: { ambient: 0.55, diffuse: 0.6, shininess: 20 }, updateTriggers: { getElevation: [m3Alt, m3Ind], getFillColor: [m3Alt, m3Ind] } })];
     ley.innerHTML = `<p class="nota"><b>${A3.nombre}</b> · ${CORTO[m3Ind]}<br>Más alta y más oscura = mayor valor. El color compara cada AGEB con el resto de la ciudad.</p>` +
@@ -423,12 +431,19 @@ function pintar3d() {
     const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
     const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
     info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
+  } else if (m3Modo === 'negocios') {
+    const pts = N.filas.filter(f => f[2] === ii);
+    capas = [new deck.ColumnLayer({ id: 'negocio', data: pts, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
+      highlightColor: [224, 165, 38, 255], getElevation: f => 60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3), getFillColor: hexRgb(COL[m3Ind]).concat(235),
+      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Ind] } })];
+    ley.innerHTML = `<p class="nota"><b>Cada edificio es un negocio</b> de ${CORTO[m3Ind]} del DENUE 2026. La altura indica su tamaño (personal ocupado). Acércate para verlos calle por calle.</p>`;
+    info.innerHTML = `<p class="nota">${fmt(pts.length)} negocios. Pasa el cursor sobre uno para ver su nombre.</p>`;
   } else if (m3Modo === 'hex') {
     const pts = N.filas.filter(f => f[2] === ii);
-    capas = [new deck.HexagonLayer({ id: 'hex', data: pts, getPosition: f => [f[1], f[0]], radius: 400, extruded: true, pickable: true, autoHighlight: true,
-      elevationRange: [0, 2800], elevationScale: 1, coverage: 0.88, upperPercentile: 100,
+    capas = [new deck.HexagonLayer({ id: 'hex', data: pts, getPosition: f => [f[1], f[0]], radius: 300, extruded: true, pickable: true, autoHighlight: true,
+      elevationRange: [0, 1800], elevationScale: 1, coverage: 0.7, opacity: 0.9, upperPercentile: 100,
       colorRange: ['#f3ecd9', '#d9e4b8', '#9cc79a', '#4f9a6b', '#1f6f50', '#1f3d33'].map(hexRgb), material: { ambient: 0.55, diffuse: 0.6 } })];
-    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]} por hexágono</b><br>Cada columna junta los negocios a unos 400 m a la redonda. Las torres altas son las zonas más saturadas.</p><div class="m3-grad"></div><div class="m3-grad-et"><span>Pocos</span><span>Muchos</span></div>`;
+    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]} por hexágono</b><br>Cada columna junta los negocios a unos 300 m a la redonda. Las torres altas son las zonas más saturadas.</p><div class="m3-grad"></div><div class="m3-grad-et"><span>Pocos</span><span>Muchos</span></div>`;
     info.innerHTML = `<p class="nota">${fmt(pts.length)} negocios de ${m3Ind} en el DENUE 2026.</p>`;
   } else {
     const filas = CB.filas.filter(f => f[2] === ii), ap = filas.filter(f => f[3] === 0).length, des = filas.length - ap;
