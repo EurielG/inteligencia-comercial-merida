@@ -341,6 +341,7 @@ function validacionPotencial() {
 /* ===================== MAPA 3D (deck.gl + MapLibre, se cargan al abrir la vista) ===================== */
 const CB = window.CAMBIOS;
 const LIBS_3D = ['https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js', 'https://unpkg.com/deck.gl@9.0.38/dist.min.js'];
+let m3Etiquetas, m3Anio = 2026, m3Play = null;
 let m3Ind = 'Servicios para mascotas', m3Modo = 'zonas', m3Alt = 'negocios', m3Ver = { aparecio: true, desaparecio: true }, mapa3d, capa3d, libs3d;
 const cargarScript = u => new Promise((ok, mal) => { const s = document.createElement('script'); s.src = u; s.onload = ok; s.onerror = mal; document.head.appendChild(s); });
 function cargarLibs3d() {
@@ -380,11 +381,21 @@ function iniciar3d() {
       style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
     });
     mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
-    capa3d = new deck.MapboxOverlay({ layers: [], getTooltip: tooltip3d });
+    capa3d = new deck.MapboxOverlay({ interleaved: true, layers: [], getTooltip: tooltip3d });
     mapa3d.addControl(capa3d);
     document.getElementById('m3-incl').onclick = () => mapa3d.easeTo({ pitch: 55, bearing: -20, duration: 900 });
     document.getElementById('m3-plano').onclick = () => mapa3d.easeTo({ pitch: 0, bearing: 0, duration: 900 });
-    pintar3d();
+    mapa3d.on('load', () => {
+      // nuestras capas van encima de calles y manzanas, y debajo de los nombres (la primera capa de texto después de la última capa de calles)
+      const capasBase = mapa3d.getStyle().layers;
+      let ultimaNoTexto = -1; capasBase.forEach((l, i) => { if (l.type !== 'symbol') ultimaNoTexto = i; });
+      m3Etiquetas = (capasBase.slice(ultimaNoTexto + 1).find(l => l.type === 'symbol') || {}).id;
+      // nombres de calles más grandes y con contorno para que se lean sobre los edificios
+      capasBase.filter(l => l.type === 'symbol' && /road|street|calle/i.test(l.id)).forEach(l => {
+        mapa3d.setPaintProperty(l.id, 'text-halo-color', '#ffffff'); mapa3d.setPaintProperty(l.id, 'text-halo-width', 1.6);
+      });
+      pintar3d();
+    });
   }).catch(() => { document.getElementById('m3-cargando').textContent = 'No se pudo cargar el mapa 3D. Revisa tu conexión y recarga la página.'; });
 }
 
@@ -410,8 +421,19 @@ function opciones3d() {
       `<label class="check"><input type="checkbox" id="m3-des" ${m3Ver.desaparecio ? 'checked' : ''}> <span class="punto" style="background:#c2412d"></span>Desaparecieron</label>`;
     el.querySelector('#m3-ap').onchange = e => { m3Ver.aparecio = e.target.checked; pintar3d(); };
     el.querySelector('#m3-des').onchange = e => { m3Ver.desaparecio = e.target.checked; pintar3d(); };
+  } else if (m3Modo === 'tiempo') {
+    el.innerHTML = `<p class="selector-tit">Año de registro: <b id="m3-anio-t">${m3Anio}</b></p>` +
+      `<div class="m3-tiempo"><button id="m3-play">${m3Play ? '❚❚' : '▶'}</button><input type="range" id="m3-anio" min="2010" max="2026" step="1" value="${m3Anio}"></div>`;
+    el.querySelector('#m3-anio').oninput = e => { m3Anio = +e.target.value; pararPlay(); pintar3d(); };
+    el.querySelector('#m3-play').onclick = () => {
+      if (m3Play) return pararPlay(true);
+      if (m3Anio >= 2026) m3Anio = 2009;
+      m3Play = setInterval(() => { m3Anio++; pintar3d(); if (m3Anio >= 2026) pararPlay(true); }, 900);
+      pintar3d();
+    };
   } else el.innerHTML = '';
 }
+function pararPlay(repintar) { if (m3Play) { clearInterval(m3Play); m3Play = null; if (repintar) pintar3d(); } }
 
 function pintar3d() {
   if (!mapa3d) return;
@@ -431,6 +453,19 @@ function pintar3d() {
     const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
     const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
     info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
+  } else if (m3Modo === 'tiempo') {
+    const pts = N.filas.filter(f => f[2] === ii), anio = f => +f[7].slice(0, 4);
+    const ver = pts.filter(f => anio(f) <= m3Anio), nuevos = ver.filter(f => anio(f) === m3Anio).length;
+    capas = [new deck.ColumnLayer({ id: 'negocio', data: ver, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
+      getElevation: f => (anio(f) === m3Anio ? 1.8 : 1) * (60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3)),
+      getFillColor: f => (anio(f) === m3Anio ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(200)),
+      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Anio, m3Ind], getElevation: [m3Anio] }, transitions: { getElevation: 400 } })];
+    const porAnio = {}; pts.forEach(f => { porAnio[anio(f)] = (porAnio[anio(f)] || 0) + 1; });
+    const maxA = Math.max(...Object.values(porAnio));
+    ley.innerHTML = `<p class="nota"><b>Fecha de registro en el DENUE</b> · ${CORTO[m3Ind]}<br><span class="m3-dorado">■</span> registrados en ${m3Anio} · <span style="color:${COL[m3Ind]}">■</span> registrados antes</p>`;
+    info.innerHTML = `<div class="sim-mini"><div><b>${fmt(ver.length)}</b><span>negocios registrados hasta ${m3Anio}</span></div><div><b>+${fmt(nuevos)}</b><span>registrados en ${m3Anio}</span></div></div>` +
+      `<div class="m3-hist">${Array.from({ length: 17 }, (_, k) => 2010 + k).map(a => `<i title="${a}: ${porAnio[a] || 0}" class="${a === m3Anio ? 'on' : ''}" style="height:${4 + 46 * (porAnio[a] || 0) / maxA}px"></i>`).join('')}</div>` +
+      `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
   } else if (m3Modo === 'negocios') {
     const pts = N.filas.filter(f => f[2] === ii);
     capas = [new deck.ColumnLayer({ id: 'negocio', data: pts, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
@@ -455,7 +490,8 @@ function pintar3d() {
     info.innerHTML = `<div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
       `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p>`;
   }
-  capa3d.setProps({ layers: capas });
+  if (m3Modo !== 'tiempo') pararPlay();
+  capa3d.setProps({ layers: capas.map(c => c.clone({ beforeId: m3Etiquetas })) });
 }
 
 /* ===================== SIMULADOR DE LOCAL (MODELO DE HUFF) ===================== */

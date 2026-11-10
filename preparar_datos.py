@@ -93,10 +93,12 @@ rumbo = (np.degrees(np.arctan2(np.sin(dl) * np.cos(p2), np.cos(p1) * np.sin(p2) 
 foco['zona'] = [zona(a, b) for a, b in zip(dist, rumbo)]
 SUBS = sorted(foco['nombre_act'].unique())
 negocios = {'industrias': FOCO, 'subcategorias': SUBS,
-            'campos': ['lat', 'lon', 'industria', 'subcategoria', 'nombre', 'personal', 'zona'],
-            'filas': [[round(a, 5), round(b, 5), FOCO.index(i), SUBS.index(s), str(n).title()[:60], str(p).replace(' personas', ''), z]
-                      for a, b, i, s, n, p, z in zip(foco['lat'], foco['lon'], foco['industria'], foco['nombre_act'],
-                                                     foco['nom_estab'], foco['per_ocu'], foco['zona'])]}
+            # alta = fecha de alta en el DENUE (año-mes): es cuando el INEGI registró el negocio, no cuando abrió
+            'campos': ['lat', 'lon', 'industria', 'subcategoria', 'nombre', 'personal', 'zona', 'alta'],
+            'filas': [[round(a, 5), round(b, 5), FOCO.index(i), SUBS.index(s), str(n).title()[:60], str(p).replace(' personas', ''), z,
+                       str(f)[:7].replace(' ', '-')]
+                      for a, b, i, s, n, p, z, f in zip(foco['lat'], foco['lon'], foco['industria'], foco['nombre_act'],
+                                                        foco['nom_estab'], foco['per_ocu'], foco['zona'], foco['fecha_alta'])]}
 print('Negocios foco con coordenadas:', len(foco))
 
 # Negocios por zona e industria
