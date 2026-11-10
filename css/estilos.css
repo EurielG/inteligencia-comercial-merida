@@ -304,3 +304,16 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .m3-hist i.pasado { background: #8fa79a; }
 .m3-hist i.on { background: #e0a526; }
 .m3-dorado { color: #e0a526; }
+
+/* Barra de tiempo del mapa 3D (abajo del mapa) */
+.linea-tiempo { position: absolute; left: 14px; right: 14px; bottom: 30px; z-index: 5; display: flex; gap: 12px; align-items: center;
+  background: rgba(255,253,249,.96); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+.linea-tiempo[hidden] { display: none; }
+.linea-tiempo > button { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #1f3d33; color: #fff; font-size: 14px; cursor: pointer; }
+.lt-cuerpo { flex: 1; min-width: 0; }
+.lt-cab { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--tinta-2); flex-wrap: wrap; }
+.lt-cab > b { font-family: 'Fraunces', serif; font-size: 22px; color: var(--tinta); }
+.lt-cuerpo input { width: 100%; accent-color: #1f3d33; margin: 2px 0 0; }
+.lt-marcas { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--tinta-2); }
+.lt-nota { margin-left: auto; font-size: 10.5px; color: var(--tinta-2); }
+@media (max-width: 960px) { .lt-nota { display: none; } .linea-tiempo { left: 8px; right: 8px; bottom: 24px; } }

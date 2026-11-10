@@ -385,6 +385,14 @@ function iniciar3d() {
     mapa3d.addControl(capa3d);
     document.getElementById('m3-incl').onclick = () => mapa3d.easeTo({ pitch: 55, bearing: -20, duration: 900 });
     document.getElementById('m3-plano').onclick = () => mapa3d.easeTo({ pitch: 0, bearing: 0, duration: 900 });
+    document.getElementById('m3-anio').oninput = e => { pararPlay(); m3Anio = +e.target.value; pintar3d(); };
+    document.getElementById('m3-play').onclick = () => {
+      if (m3Play) return pararPlay(true);
+      if (m3Anio >= 2026) m3Anio = 2009;
+      document.getElementById('m3-play').textContent = '❚❚';
+      m3Play = setInterval(() => { m3Anio++; pintar3d(); if (m3Anio >= 2026) pararPlay(true); }, 900);
+      pintar3d();
+    };
     mapa3d.on('load', () => {
       // nuestras capas van encima de calles y manzanas, y debajo de los nombres (la primera capa de texto después de la última capa de calles)
       const capasBase = mapa3d.getStyle().layers;
@@ -421,19 +429,9 @@ function opciones3d() {
       `<label class="check"><input type="checkbox" id="m3-des" ${m3Ver.desaparecio ? 'checked' : ''}> <span class="punto" style="background:#c2412d"></span>Desaparecieron</label>`;
     el.querySelector('#m3-ap').onchange = e => { m3Ver.aparecio = e.target.checked; pintar3d(); };
     el.querySelector('#m3-des').onchange = e => { m3Ver.desaparecio = e.target.checked; pintar3d(); };
-  } else if (m3Modo === 'tiempo') {
-    el.innerHTML = `<p class="selector-tit">Año de registro: <b id="m3-anio-t">${m3Anio}</b></p>` +
-      `<div class="m3-tiempo"><button id="m3-play">${m3Play ? '❚❚' : '▶'}</button><input type="range" id="m3-anio" min="2010" max="2026" step="1" value="${m3Anio}"></div>`;
-    el.querySelector('#m3-anio').oninput = e => { m3Anio = +e.target.value; pararPlay(); pintar3d(); };
-    el.querySelector('#m3-play').onclick = () => {
-      if (m3Play) return pararPlay(true);
-      if (m3Anio >= 2026) m3Anio = 2009;
-      m3Play = setInterval(() => { m3Anio++; pintar3d(); if (m3Anio >= 2026) pararPlay(true); }, 900);
-      pintar3d();
-    };
   } else el.innerHTML = '';
 }
-function pararPlay(repintar) { if (m3Play) { clearInterval(m3Play); m3Play = null; if (repintar) pintar3d(); } }
+function pararPlay(repintar) { if (m3Play) { clearInterval(m3Play); m3Play = null; document.getElementById('m3-play').textContent = '▶'; if (repintar) pintar3d(); } }
 
 function pintar3d() {
   if (!mapa3d) return;
@@ -454,19 +452,21 @@ function pintar3d() {
     const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
     info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
   } else if (m3Modo === 'tiempo') {
-    // Ordenados por fecha de registro: así los negocios de cada año nuevo se agregan al final y la animación solo hace crecer a esos
-    const anio = f => +f[7].slice(0, 4), pts = N.filas.filter(f => f[2] === ii).sort((x, y) => (x[7] < y[7] ? -1 : x[7] > y[7] ? 1 : 0));
-    const ver = pts.filter(f => anio(f) <= m3Anio), nuevos = ver.filter(f => anio(f) === m3Anio).length;
-    capas = [new deck.ColumnLayer({ id: 'negocio', data: ver, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
-      getElevation: f => 60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3),
-      getFillColor: f => (anio(f) === m3Anio ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(235)),
-      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Anio, m3Ind] },
-      transitions: { getElevation: { duration: 700, enter: () => [0] } } })];
+    // Puntos del tamaño de los del mapa normal: los que ya estaban con el color de la industria y los que se suman ese año en dorado, más grandes
+    const anio = f => +f[7].slice(0, 4), pts = N.filas.filter(f => f[2] === ii);
+    const ver = pts.filter(f => anio(f) <= m3Anio), nuevos = ver.filter(f => anio(f) === m3Anio);
+    const orden = [...ver.filter(f => anio(f) < m3Anio), ...nuevos];
+    capas = [new deck.ScatterplotLayer({ id: 'negocio', data: orden, getPosition: f => [f[1], f[0]], radiusUnits: 'pixels', stroked: true, pickable: true, autoHighlight: true,
+      getRadius: f => (anio(f) === m3Anio && m3Anio < 2026 ? 7 : 4.5), getLineColor: [255, 255, 255], lineWidthUnits: 'pixels', getLineWidth: 1.2,
+      getFillColor: f => (anio(f) === m3Anio && m3Anio < 2026 ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(240)),
+      updateTriggers: { getFillColor: [m3Anio, m3Ind], getRadius: [m3Anio] }, transitions: { getRadius: { duration: 500, enter: () => [0] } } })];
     const acum = Array.from({ length: 17 }, (_, k) => pts.filter(f => anio(f) <= 2010 + k).length), maxA = acum[16] || 1;
-    ley.innerHTML = `<p class="nota"><b>Negocios acumulados</b> de ${CORTO[m3Ind]} según su fecha de registro en el DENUE. Los de años anteriores se quedan en el mapa y cada año se suman los nuevos.<br>` +
-      `<span class="m3-dorado">■</span> se suman en ${m3Anio} · <span style="color:${COL[m3Ind]}">■</span> ya estaban</p>`;
-    info.innerHTML = `<div class="sim-mini"><div><b>${fmt(ver.length)}</b><span>negocios en el mapa en ${m3Anio}</span></div><div><b>+${fmt(nuevos)}</b><span>se suman en ${m3Anio}</span></div></div>` +
-      `<p class="selector-tit" style="margin:8px 0 0">Acumulado por año</p>` +
+    document.getElementById('m3-lt-anio').textContent = m3Anio;
+    document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(ver.length)} negocios registrados hasta ${m3Anio}` + (nuevos.length ? ` · <b class="m3-dorado">+${fmt(nuevos.length)} ese año</b>` : '');
+    document.getElementById('m3-anio').value = m3Anio;
+    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]}</b> según su año de registro en el DENUE. Mueve la barra de abajo del mapa o dale ▶: los de años anteriores se quedan y cada año se suman los nuevos.<br>` +
+      `<span class="m3-dorado">●</span> se suman ese año · <span style="color:${COL[m3Ind]}">●</span> ya estaban</p>`;
+    info.innerHTML = `<p class="selector-tit" style="margin:4px 0 0">Acumulado por año</p>` +
       `<div class="m3-hist">${acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
       `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
       `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años y casi nada entre ellos. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
@@ -495,6 +495,7 @@ function pintar3d() {
       `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p>`;
   }
   if (m3Modo !== 'tiempo') pararPlay();
+  document.getElementById('m3-lt').hidden = m3Modo !== 'tiempo';
   capa3d.setProps({ layers: capas.map(c => c.clone({ beforeId: m3Etiquetas })) });
 }
 
