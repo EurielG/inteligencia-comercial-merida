@@ -366,8 +366,29 @@ function encoger(f, k = 0.82) {
   return { ...f, geometry: { type: 'MultiPolygon', coordinates: nuevo } };
 }
 let G_ENC = null;
+// AGEB de cada negocio (punto en polígono, una sola vez) para contar cuántos había en cada AGEB en cada año
+G.features.forEach((f, k) => { f.properties._k = k; });
+let AGEB_NEG = null;
+function agebDeNegocios() {
+  if (AGEB_NEG) return AGEB_NEG;
+  const pol = G.features.map(f => { const r = f.geometry.type === 'Polygon' ? [f.geometry.coordinates[0]] : f.geometry.coordinates.map(p => p[0]);
+    const xs = r.flat().map(c => c[0]), ys = r.flat().map(c => c[1]); return { r, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; });
+  const dentro = (x, y, a) => { let d = false; for (let i = 0, j = a.length - 1; i < a.length; j = i++) { const [xi, yi] = a[i], [xj, yj] = a[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) d = !d; } return d; };
+  AGEB_NEG = N.filas.map(f => pol.findIndex(q => f[1] >= q.x0 && f[1] <= q.x1 && f[0] >= q.y0 && f[0] <= q.y1 && q.r.some(a => dentro(f[1], f[0], a))));
+  return AGEB_NEG;
+}
+function conteoTiempo(ii, hasta) {
+  const idx = agebDeNegocios(), n = G.features.length, r = { cuenta: new Array(n).fill(0), final: new Array(n).fill(0), nuevos: new Array(n).fill(0), total: 0, nuevosTot: 0, acum: new Array(17).fill(0) };
+  N.filas.forEach((f, i) => { if (f[2] !== ii) return; const a = +String(f[7]).slice(0, 4), k = idx[i];
+    for (let y = Math.max(a, 2010); y <= 2026; y++) r.acum[y - 2010]++;
+    if (k >= 0) r.final[k]++;
+    if (a <= hasta) { r.total++; if (k >= 0) r.cuenta[k]++; if (a === hasta) { r.nuevosTot++; if (k >= 0) r.nuevos[k]++; } } });
+  return r;
+}
+let m3T = null;
 const ALTURAS = {
-  negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => p.mix[MIX.indexOf(m3Ind)], fmt: v => `${v} negocios` },
+  negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => (m3T ? m3T.final[p._k] : p.mix[MIX.indexOf(m3Ind)]), fmt: v => `${v} negocios` },
   objetivo: { nombre: 'Hogares A/B y C+ en la AGEB', valor: p => p.objetivo, fmt: v => `${fmt(v)} hogares A/B y C+` },
   potencial: { nombre: 'Índice de potencial', valor: p => p[ABR[m3Ind] + '_ip'], fmt: v => `índice ${v} de 100` },
 };
@@ -410,6 +431,9 @@ function iniciar3d() {
 function tooltip3d({ object, layer }) {
   if (!object) return null;
   const caja = h => ({ html: h, style: { background: '#fffdf9', color: '#1f2a24', fontSize: '12px', borderRadius: '8px', padding: '8px 10px', boxShadow: '0 4px 14px rgba(0,0,0,.18)' } });
+  if (layer.id === 'agebs' && m3Alt === 'negocios' && m3T) { const p = object.properties, k = p._k;
+    return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br><b>${m3T.cuenta[k]} negocios</b> de ${CORTO[m3Ind]} registrados hasta ${m3Anio}` +
+      (m3T.nuevos[k] ? `<br><span style="color:#b07a10">+${m3T.nuevos[k]} se sumaron en ${m3Anio}</span>` : '') + `<br>En 2026: ${m3T.final[k]} · Nivel ${p.nse} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
@@ -439,37 +463,38 @@ function pintar3d() {
   const ii = INDS.indexOf(m3Ind), ley = document.getElementById('m3-leyenda'), info = document.getElementById('m3-info');
   let capas = [];
   if (m3Modo === 'zonas') {
+    // Con "Negocios de la industria" la barra de abajo controla el año: cada edificio crece con los negocios registrados hasta ese año
+    const conTiempo = m3Alt === 'negocios';
+    m3T = conTiempo ? conteoTiempo(ii, m3Anio) : null;
     const A3 = ALTURAS[m3Alt], vals = G.features.map(f => A3.valor(f.properties)).filter(v => v != null), max = Math.max(...vals, 1);
     const orden = [...vals].sort((a, b) => a - b), q = v => (v == null ? null : orden.findIndex(x => x >= v) / Math.max(orden.length - 1, 1));
+    const valorHoy = p => (conTiempo ? m3T.cuenta[p._k] : A3.valor(p));
+    const dorado = p => conTiempo && m3Anio < 2026 && m3T.nuevos[p._k] > 0;
     if (!G_ENC) G_ENC = { type: 'FeatureCollection', features: G.features.map(f => encoger(f)) };
     capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.85, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
-      getElevation: f => { const v = A3.valor(f.properties); return v == null ? 0 : 20 + 1500 * v / max; },
-      getFillColor: f => colorEscala(q(A3.valor(f.properties))), getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3,
-      material: { ambient: 0.55, diffuse: 0.6, shininess: 20 }, updateTriggers: { getElevation: [m3Alt, m3Ind], getFillColor: [m3Alt, m3Ind] } })];
+      getElevation: f => { const v = valorHoy(f.properties); return v == null || (conTiempo && v === 0) ? 0 : 20 + 1500 * v / max; },
+      getFillColor: f => (dorado(f.properties) ? [224, 165, 38, 245] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 110] : colorEscala(q(valorHoy(f.properties)))),
+      getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.55, diffuse: 0.6, shininess: 20 },
+      transitions: conTiempo ? { getElevation: { duration: 650 }, getFillColor: { duration: 400 } } : {},
+      updateTriggers: { getElevation: [m3Alt, m3Ind, m3Anio], getFillColor: [m3Alt, m3Ind, m3Anio] } })];
     ley.innerHTML = `<p class="nota"><b>${A3.nombre}</b> · ${CORTO[m3Ind]}<br>Más alta y más oscura = mayor valor. El color compara cada AGEB con el resto de la ciudad.</p>` +
-      `<div class="m3-grad"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>`;
-    const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
-    const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
-    info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
-  } else if (m3Modo === 'tiempo') {
-    // Puntos del tamaño de los del mapa normal: los que ya estaban con el color de la industria y los que se suman ese año en dorado, más grandes
-    const anio = f => +f[7].slice(0, 4), pts = N.filas.filter(f => f[2] === ii);
-    const ver = pts.filter(f => anio(f) <= m3Anio), nuevos = ver.filter(f => anio(f) === m3Anio);
-    const orden = [...ver.filter(f => anio(f) < m3Anio), ...nuevos];
-    capas = [new deck.ScatterplotLayer({ id: 'negocio', data: orden, getPosition: f => [f[1], f[0]], radiusUnits: 'pixels', stroked: true, pickable: true, autoHighlight: true,
-      getRadius: f => (anio(f) === m3Anio && m3Anio < 2026 ? 7 : 4.5), getLineColor: [255, 255, 255], lineWidthUnits: 'pixels', getLineWidth: 1.2,
-      getFillColor: f => (anio(f) === m3Anio && m3Anio < 2026 ? [224, 165, 38, 255] : hexRgb(COL[m3Ind]).concat(240)),
-      updateTriggers: { getFillColor: [m3Anio, m3Ind], getRadius: [m3Anio] }, transitions: { getRadius: { duration: 500, enter: () => [0] } } })];
-    const acum = Array.from({ length: 17 }, (_, k) => pts.filter(f => anio(f) <= 2010 + k).length), maxA = acum[16] || 1;
-    document.getElementById('m3-lt-anio').textContent = m3Anio;
-    document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(ver.length)} negocios registrados hasta ${m3Anio}` + (nuevos.length ? ` · <b class="m3-dorado">+${fmt(nuevos.length)} ese año</b>` : '');
-    document.getElementById('m3-anio').value = m3Anio;
-    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]}</b> según su año de registro en el DENUE. Mueve la barra de abajo del mapa o dale ▶: los de años anteriores se quedan y cada año se suman los nuevos.<br>` +
-      `<span class="m3-dorado">●</span> se suman ese año · <span style="color:${COL[m3Ind]}">●</span> ya estaban</p>`;
-    info.innerHTML = `<p class="selector-tit" style="margin:4px 0 0">Acumulado por año</p>` +
-      `<div class="m3-hist">${acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
-      `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
-      `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años y casi nada entre ellos. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
+      `<div class="m3-grad"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>` +
+      (conTiempo ? `<p class="nota" style="margin-top:8px"><b>Línea de tiempo:</b> mueve la barra de abajo del mapa o dale ▶ para ver cómo crecen los edificios con los negocios registrados cada año. <span class="m3-dorado">■</span> AGEB que sumó negocios ese año.</p>` : '');
+    if (conTiempo) {
+      document.getElementById('m3-lt-anio').textContent = m3Anio;
+      document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(m3T.total)} negocios registrados hasta ${m3Anio}` + (m3T.nuevosTot && m3Anio < 2026 ? ` · <b class="m3-dorado">+${fmt(m3T.nuevosTot)} ese año</b>` : '');
+      document.getElementById('m3-anio').value = m3Anio;
+      const lista = G.features.map(f => ({ p: f.properties, v: m3T.cuenta[f.properties._k] })).filter(x => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 5), maxA = m3T.acum[16] || 1;
+      info.innerHTML = `<h5>Las 5 más altas en ${m3Anio}</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${x.v} negocios</li>`).join('')}</ol>` +
+        `<p class="selector-tit" style="margin:10px 0 0">Acumulado por año</p>` +
+        `<div class="m3-hist">${m3T.acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
+        `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
+        `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años y casi nada entre ellos. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
+    } else {
+      const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
+      const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
+      info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
+    }
   } else if (m3Modo === 'negocios') {
     const pts = N.filas.filter(f => f[2] === ii);
     capas = [new deck.ColumnLayer({ id: 'negocio', data: pts, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
@@ -494,8 +519,9 @@ function pintar3d() {
     info.innerHTML = `<div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
       `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p>`;
   }
-  if (m3Modo !== 'tiempo') pararPlay();
-  document.getElementById('m3-lt').hidden = m3Modo !== 'tiempo';
+  const ltVisible = m3Modo === 'zonas' && m3Alt === 'negocios';
+  if (!ltVisible) { pararPlay(); m3T = null; }
+  document.getElementById('m3-lt').hidden = !ltVisible;
   capa3d.setProps({ layers: capas.map(c => c.clone({ beforeId: m3Etiquetas })) });
 }
 
