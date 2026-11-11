@@ -445,8 +445,6 @@ function tooltip3d({ object, layer }) {
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
-  if (layer.id === 'negocio') return caja(`<b>${esc(object[4])}</b><br>${esc(N.subcategorias[object[3]])}<br>${object[5]} personas · zona ${object[6]}`);
-  if (layer.id === 'hex') return caja(`<b>${object.points ? object.points.length : object.count} negocios</b> de ${CORTO[m3Ind]}<br>en este hexágono (unos 500 m de lado a lado)`);
   if (layer.id === 'cambios') return caja(`<b>${esc(object[4])}</b><br>${object[3] === 0 ? '🟢 Apareció entre 2024 y 2026' : '🔴 Ya no aparece en 2026'}<br>${object[5]} personas`);
   return null;
 }
@@ -503,20 +501,6 @@ function pintar3d() {
       const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
       info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
     }
-  } else if (m3Modo === 'negocios') {
-    const pts = N.filas.filter(f => f[2] === ii);
-    capas = [new deck.ColumnLayer({ id: 'negocio', data: pts, getPosition: f => [f[1], f[0]], radius: 28, diskResolution: 4, angle: 45, extruded: true, pickable: true, autoHighlight: true,
-      highlightColor: [224, 165, 38, 255], getElevation: f => 60 + 55 * Math.sqrt(TAM_MED[f[5]] || 3), getFillColor: hexRgb(COL[m3Ind]).concat(235),
-      material: { ambient: 0.6, diffuse: 0.6 }, updateTriggers: { getFillColor: [m3Ind] } })];
-    ley.innerHTML = `<p class="nota"><b>Cada edificio es un negocio</b> de ${CORTO[m3Ind]} del DENUE 2026. La altura indica su tamaño (personal ocupado). Acércate para verlos calle por calle.</p>`;
-    info.innerHTML = `<p class="nota">${fmt(pts.length)} negocios. Pasa el cursor sobre uno para ver su nombre.</p>`;
-  } else if (m3Modo === 'hex') {
-    const pts = N.filas.filter(f => f[2] === ii);
-    capas = [new deck.HexagonLayer({ id: 'hex', data: pts, getPosition: f => [f[1], f[0]], radius: 300, extruded: true, pickable: true, autoHighlight: true,
-      elevationRange: [0, 1800], elevationScale: 1, coverage: 0.7, opacity: 0.9, upperPercentile: 100,
-      colorRange: ['#f3ecd9', '#d9e4b8', '#9cc79a', '#4f9a6b', '#1f6f50', '#1f3d33'].map(hexRgb), material: { ambient: 0.55, diffuse: 0.6 } })];
-    ley.innerHTML = `<p class="nota"><b>Negocios de ${CORTO[m3Ind]} por hexágono</b><br>Cada columna junta los negocios a unos 300 m a la redonda. Las torres altas son las zonas más saturadas.</p><div class="m3-grad"></div><div class="m3-grad-et"><span>Pocos</span><span>Muchos</span></div>`;
-    info.innerHTML = `<p class="nota">${fmt(pts.length)} negocios de ${m3Ind} en el DENUE 2026.</p>`;
   } else {
     const filas = CB.filas.filter(f => f[2] === ii), ap = filas.filter(f => f[3] === 0).length, des = filas.length - ap;
     const ver = filas.filter(f => (f[3] === 0 && m3Ver.aparecio) || (f[3] === 1 && m3Ver.desaparecio));
