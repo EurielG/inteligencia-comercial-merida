@@ -246,10 +246,12 @@ B['vive'] = (B['id'].isin(d26['id']) | llave(B).isin(set(llave(d26)))).astype(in
 k24 = set(llave(d24))
 nuevos = d26[d26['industria'].isin(FOCO) & ~d26['id'].isin(d24['id']) & ~llave(d26).isin(k24)].dropna(subset=['lat', 'lon'])
 idos = B[B['vive'] == 0]
-cambios = {'campos': ['lat', 'lon', 'industria', 'tipo', 'nombre', 'personal'], 'industrias': FOCO, 'tipos': ['aparecio', 'desaparecio'],
-           'filas': [[round(a, 5), round(b, 5), FOCO.index(i), t, str(n).title()[:60], str(p).replace(' personas', '')]
+# alta = fecha de registro en el DENUE: con ella la línea de tiempo del mapa 3D muestra a los que desaparecieron desde que se
+# registraron hasta 2024 y los quita en 2025 (estaban en el DENUE 2024 y ya no en el de 2026)
+cambios = {'campos': ['lat', 'lon', 'industria', 'tipo', 'nombre', 'personal', 'alta'], 'industrias': FOCO, 'tipos': ['aparecio', 'desaparecio'],
+           'filas': [[round(a, 5), round(b, 5), FOCO.index(i), t, str(n).title()[:60], str(p).replace(' personas', ''), str(f)[:7].replace(' ', '-')]
                      for df, t in ((nuevos, 0), (idos, 1))
-                     for a, b, i, n, p in zip(df['lat'], df['lon'], df['industria'], df['nom_estab'], df['per_ocu'])]}
+                     for a, b, i, n, p, f in zip(df['lat'], df['lon'], df['industria'], df['nom_estab'], df['per_ocu'], df['fecha_alta'])]}
 print('Cambios 2024-2026:', {i: (int((nuevos.industria == i).sum()), int((idos.industria == i).sum())) for i in FOCO})
 
 PESOS = {'competencia': .35, 'demanda': .30, 'crecimiento': .20, 'nivel': .15}

@@ -368,27 +368,34 @@ function encoger(f, k = 0.82) {
 let G_ENC = null;
 // AGEB de cada negocio (punto en polígono, una sola vez) para contar cuántos había en cada AGEB en cada año
 G.features.forEach((f, k) => { f.properties._k = k; });
-let AGEB_NEG = null;
-function agebDeNegocios() {
-  if (AGEB_NEG) return AGEB_NEG;
+let AGEB_NEG = null, AGEB_IDOS = null;
+function agebDe(filas) {
   const pol = G.features.map(f => { const r = f.geometry.type === 'Polygon' ? [f.geometry.coordinates[0]] : f.geometry.coordinates.map(p => p[0]);
     const xs = r.flat().map(c => c[0]), ys = r.flat().map(c => c[1]); return { r, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; });
   const dentro = (x, y, a) => { let d = false; for (let i = 0, j = a.length - 1; i < a.length; j = i++) { const [xi, yi] = a[i], [xj, yj] = a[j];
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) d = !d; } return d; };
-  AGEB_NEG = N.filas.map(f => pol.findIndex(q => f[1] >= q.x0 && f[1] <= q.x1 && f[0] >= q.y0 && f[0] <= q.y1 && q.r.some(a => dentro(f[1], f[0], a))));
-  return AGEB_NEG;
+  return filas.map(f => pol.findIndex(q => f[1] >= q.x0 && f[1] <= q.x1 && f[0] >= q.y0 && f[0] <= q.y1 && q.r.some(a => dentro(f[1], f[0], a))));
 }
+// Negocios por AGEB en cada año: los del DENUE 2026 desde su año de registro, y los que estaban en el DENUE 2024 pero ya no en
+// el de 2026 (cerraron, se mudaron o cambiaron de registro) desde su año de registro hasta 2024; en 2025 se quitan.
+const IDOS = CB.filas.filter(f => f[3] === 1);
 function conteoTiempo(ii, hasta) {
-  const idx = agebDeNegocios(), n = G.features.length, r = { cuenta: new Array(n).fill(0), final: new Array(n).fill(0), nuevos: new Array(n).fill(0), total: 0, nuevosTot: 0, acum: new Array(17).fill(0) };
-  N.filas.forEach((f, i) => { if (f[2] !== ii) return; const a = +String(f[7]).slice(0, 4), k = idx[i];
-    for (let y = Math.max(a, 2010); y <= 2026; y++) r.acum[y - 2010]++;
-    if (k >= 0) r.final[k]++;
-    if (a <= hasta) { r.total++; if (k >= 0) r.cuenta[k]++; if (a === hasta) { r.nuevosTot++; if (k >= 0) r.nuevos[k]++; } } });
+  if (!AGEB_NEG) { AGEB_NEG = agebDe(N.filas); AGEB_IDOS = agebDe(IDOS); }
+  const n = G.features.length, cero = () => new Array(n).fill(0), anio = f => +String(f[f.length - 1]).slice(0, 4);
+  const r = { cuenta: cero(), c24: cero(), c26: cero(), nuevos: cero(), quitados: cero(), total: 0, nuevosTot: 0, quitadosTot: 0, acum: new Array(17).fill(0) };
+  const sumar = (f, k, fin) => { const a = anio(f);
+    for (let y = Math.max(a, 2010); y <= fin; y++) r.acum[y - 2010]++;
+    if (k >= 0) { if (a <= 2024) r.c24[k]++; if (fin === 2026) r.c26[k]++; }
+    if (a <= hasta && hasta <= fin) { r.total++; if (k >= 0) r.cuenta[k]++; if (a === hasta) { r.nuevosTot++; if (k >= 0) r.nuevos[k]++; } }
+    if (fin === 2024 && hasta === 2025) { r.quitadosTot++; if (k >= 0) r.quitados[k]++; } };
+  N.filas.forEach((f, i) => { if (f[2] === ii) sumar(f, AGEB_NEG[i], 2026); });
+  IDOS.forEach((f, i) => { if (f[2] === ii) sumar(f, AGEB_IDOS[i], 2024); });
+  r.pico = r.c24.map((v, k) => Math.max(v, r.c26[k]));
   return r;
 }
 let m3T = null;
 const ALTURAS = {
-  negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => (m3T ? m3T.final[p._k] : p.mix[MIX.indexOf(m3Ind)]), fmt: v => `${v} negocios` },
+  negocios: { nombre: 'Negocios de la industria en la AGEB', valor: p => (m3T ? m3T.pico[p._k] : p.mix[MIX.indexOf(m3Ind)]), fmt: v => `${v} negocios` },
   objetivo: { nombre: 'Hogares A/B y C+ en la AGEB', valor: p => p.objetivo, fmt: v => `${fmt(v)} hogares A/B y C+` },
   potencial: { nombre: 'Índice de potencial', valor: p => p[ABR[m3Ind] + '_ip'], fmt: v => `índice ${v} de 100` },
 };
@@ -433,7 +440,8 @@ function tooltip3d({ object, layer }) {
   const caja = h => ({ html: h, style: { background: '#fffdf9', color: '#1f2a24', fontSize: '12px', borderRadius: '8px', padding: '8px 10px', boxShadow: '0 4px 14px rgba(0,0,0,.18)' } });
   if (layer.id === 'agebs' && m3Alt === 'negocios' && m3T) { const p = object.properties, k = p._k;
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br><b>${m3T.cuenta[k]} negocios</b> de ${CORTO[m3Ind]} registrados hasta ${m3Anio}` +
-      (m3T.nuevos[k] ? `<br><span style="color:#b07a10">+${m3T.nuevos[k]} se sumaron en ${m3Anio}</span>` : '') + `<br>En 2026: ${m3T.final[k]} · Nivel ${p.nse} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
+      (m3T.nuevos[k] ? `<br><span style="color:#b07a10">+${m3T.nuevos[k]} se sumaron en ${m3Anio}</span>` : '') +
+      (m3T.quitados[k] ? `<br><span style="color:#c2412d">−${m3T.quitados[k]} ya no aparecen (estaban en 2024)</span>` : '') + `<br>En 2024: ${m3T.c24[k]} · en 2026: ${m3T.c26[k]} · Nivel ${p.nse} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
@@ -469,27 +477,27 @@ function pintar3d() {
     const A3 = ALTURAS[m3Alt], vals = G.features.map(f => A3.valor(f.properties)).filter(v => v != null), max = Math.max(...vals, 1);
     const orden = [...vals].sort((a, b) => a - b), q = v => (v == null ? null : orden.findIndex(x => x >= v) / Math.max(orden.length - 1, 1));
     const valorHoy = p => (conTiempo ? m3T.cuenta[p._k] : A3.valor(p));
-    const dorado = p => conTiempo && m3Anio < 2026 && m3T.nuevos[p._k] > 0;
+    const cambioA = p => { if (!conTiempo || m3Anio >= 2026) return 0; const k = p._k, a = m3T.nuevos[k], q = m3T.quitados[k]; return q > a ? -1 : a > 0 ? 1 : 0; };
     if (!G_ENC) G_ENC = { type: 'FeatureCollection', features: G.features.map(f => encoger(f)) };
     capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.85, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
       getElevation: f => { const v = valorHoy(f.properties); return v == null || (conTiempo && v === 0) ? 0 : 20 + 1500 * v / max; },
-      getFillColor: f => (dorado(f.properties) ? [224, 165, 38, 245] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 110] : colorEscala(q(valorHoy(f.properties)))),
+      getFillColor: f => (cambioA(f.properties) === 1 ? [224, 165, 38, 245] : cambioA(f.properties) === -1 ? [194, 65, 45, 235] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 110] : colorEscala(q(valorHoy(f.properties)))),
       getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.55, diffuse: 0.6, shininess: 20 },
       transitions: conTiempo ? { getElevation: { duration: 650 }, getFillColor: { duration: 400 } } : {},
       updateTriggers: { getElevation: [m3Alt, m3Ind, m3Anio], getFillColor: [m3Alt, m3Ind, m3Anio] } })];
     ley.innerHTML = `<p class="nota"><b>${A3.nombre}</b> · ${CORTO[m3Ind]}<br>Más alta y más oscura = mayor valor. El color compara cada AGEB con el resto de la ciudad.</p>` +
       `<div class="m3-grad"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>` +
-      (conTiempo ? `<p class="nota" style="margin-top:8px"><b>Línea de tiempo:</b> mueve la barra de abajo del mapa o dale ▶ para ver cómo crecen los edificios con los negocios registrados cada año. <span class="m3-dorado">■</span> AGEB que sumó negocios ese año.</p>` : '');
+      (conTiempo ? `<p class="nota" style="margin-top:8px"><b>Línea de tiempo:</b> mueve la barra de abajo del mapa o dale ▶ para ver cómo crecen los edificios con los negocios registrados cada año. Incluye a los que ya cerraron: los que estaban en el DENUE 2024 y ya no en el de 2026 se quitan en 2025.<br><span class="m3-dorado">■</span> AGEB que sumó negocios ese año · <span style="color:#c2412d">■</span> AGEB que perdió negocios ese año</p>` : '');
     if (conTiempo) {
       document.getElementById('m3-lt-anio').textContent = m3Anio;
-      document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(m3T.total)} negocios registrados hasta ${m3Anio}` + (m3T.nuevosTot && m3Anio < 2026 ? ` · <b class="m3-dorado">+${fmt(m3T.nuevosTot)} ese año</b>` : '');
+      document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(m3T.total)} negocios en ${m3Anio}` + (m3T.nuevosTot && m3Anio < 2026 ? ` · <b class="m3-dorado">+${fmt(m3T.nuevosTot)} ese año</b>` : '') + (m3T.quitadosTot ? ` · <b style="color:#c2412d">−${fmt(m3T.quitadosTot)} ya no aparecen</b>` : '');
       document.getElementById('m3-anio').value = m3Anio;
       const lista = G.features.map(f => ({ p: f.properties, v: m3T.cuenta[f.properties._k] })).filter(x => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 5), maxA = m3T.acum[16] || 1;
       info.innerHTML = `<h5>Las 5 más altas en ${m3Anio}</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${x.v} negocios</li>`).join('')}</ol>` +
         `<p class="selector-tit" style="margin:10px 0 0">Acumulado por año</p>` +
         `<div class="m3-hist">${m3T.acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
         `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
-        `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años y casi nada entre ellos. Los negocios que cerraron antes de 2026 no aparecen.</p>`;
+        `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años. Solo tenemos el DENUE de 2024 y de 2026: los que cerraron entre esas dos ediciones se quitan en 2025, pero los que cerraron antes de 2024 no aparecen en ningún año.</p>`;
     } else {
       const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
       const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
