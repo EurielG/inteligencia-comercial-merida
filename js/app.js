@@ -452,6 +452,7 @@ function iniciar3d() {
       capasBase.filter(l => l.type === 'symbol' && /road|street|calle/i.test(l.id)).forEach(l => {
         mapa3d.setPaintProperty(l.id, 'text-halo-color', '#ffffff'); mapa3d.setPaintProperty(l.id, 'text-halo-width', 1.6);
       });
+      agregarRelieve();
       agregarEdificios();
       mapa3d.on('zoom', aplicarZoom3d);
       pintar3d();
@@ -567,6 +568,17 @@ function aplicarZoom3d() {
   capa3d.setProps({ layers: m3Capas.map(c => c.clone({ beforeId: m3Etiquetas, ...v })) });
   const aviso = document.getElementById('m3-calle');
   if (aviso) aviso.hidden = mapa3d.getZoom() < Z_CALLE[1] - 0.3;
+}
+// Relieve: modelo de elevación gratuito de AWS (Terrain Tiles, formato terrarium). Mérida es casi plana (8 a 10 m sobre el nivel
+// del mar), así que solo se usa como sombreado: le da al terreno de alrededor la textura de la piedra caliza y sus desniveles.
+const DEM = { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+  attribution: 'Relieve: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a>' };
+function agregarRelieve() {
+  mapa3d.addSource('dem-sombra', DEM);
+  const capas = mapa3d.getStyle().layers, primeraLinea = (capas.find(l => l.type === 'line') || {}).id;
+  mapa3d.addLayer({ id: 'relieve', type: 'hillshade', source: 'dem-sombra',
+    paint: { 'hillshade-exaggeration': 0.7, 'hillshade-shadow-color': '#6b5d48', 'hillshade-highlight-color': '#fffaf0', 'hillshade-accent-color': '#8a7a62', 'hillshade-illumination-direction': 315 } }, primeraLinea);
+  // No se levanta el terreno en 3D: aun exagerado 8 veces Mérida se ve plana, y taparía el piso de color de la vista de calle.
 }
 function agregarEdificios() {
   mapa3d.addSource('osm-edificios', { type: 'vector', url: 'https://tiles.openfreemap.org/planet',
