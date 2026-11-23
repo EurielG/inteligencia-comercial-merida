@@ -352,11 +352,26 @@ function cargarLibs3d() {
   return libs3d;
 }
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-const ESCALA_3D = ['#f3ecd9', '#d9e4b8', '#9cc79a', '#4f9a6b', '#1f6f50', '#1f3d33'].map(hexRgb);
+// Cada industria se pinta con su propio color (el mismo del resto de la página): de arena clara a su tono más oscuro
+const RAMPAS_HEX = {
+  fit: ['#e9e3d6', '#bccfdc', '#7ea3c2', '#2f6690', '#173550'],
+  mas: ['#e9e3d6', '#eac4b0', '#d68b6c', '#b5543c', '#62281b'],
+  pro: ['#e9e3d6', '#d2cae0', '#a092c2', '#6b5b95', '#352a52'],
+};
+const RAMPAS = Object.fromEntries(Object.entries(RAMPAS_HEX).map(([k, v]) => [k, v.map(hexRgb)]));
+const C_SUMO = [224, 165, 38], C_PERDIO = [43, 39, 36];
 function colorEscala(t) {
+  const R = RAMPAS[ABR[m3Ind]];
   if (t == null || isNaN(t)) return [225, 220, 210, 120];
-  const x = Math.max(0, Math.min(1, t)) * (ESCALA_3D.length - 1), i = Math.min(Math.floor(x), ESCALA_3D.length - 2), f = x - i;
-  return ESCALA_3D[i].map((c, k) => Math.round(c + (ESCALA_3D[i + 1][k] - c) * f)).concat(235);
+  const x = Math.max(0, Math.min(1, t)) * (R.length - 1), i = Math.min(Math.floor(x), R.length - 2), f = x - i;
+  return R[i].map((c, k) => Math.round(c + (R[i + 1][k] - c) * f)).concat(245);
+}
+const gradienteCSS = () => `linear-gradient(90deg, ${RAMPAS_HEX[ABR[m3Ind]].join(', ')})`;
+const sinMovimiento = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Vuela a una AGEB (desde el top 5)
+function irAgeb(k) {
+  const c = CEN[k]; if (!c || !mapa3d) return;
+  mapa3d.flyTo({ center: [c.lon, c.lat], zoom: 12.9, pitch: 55, bearing: mapa3d.getBearing(), duration: sinMovimiento ? 0 : 1600 });
 }
 // Cada AGEB se encoge un poco hacia su centro para que entre bloque y bloque se vean las calles del mapa base
 function encoger(f, k = 0.82) {
@@ -405,11 +420,18 @@ function iniciar3d() {
   cargarLibs3d().then(() => {
     document.getElementById('m3-cargando').style.display = 'none';
     mapa3d = new maplibregl.Map({
-      container: 'mapa-3d', center: [-89.62, 20.99], zoom: 11.3, pitch: 50, bearing: -15, maxPitch: 70,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      // Empieza visto desde arriba; al cargar se inclina a 3D (la única animación automática de la vista)
+      container: 'mapa-3d', center: [-89.62, 20.985], zoom: 11.1, pitch: sinMovimiento ? 52 : 0, bearing: sinMovimiento ? -18 : 0, maxPitch: 70,
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', attributionControl: { compact: true },
     });
-    mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
-    capa3d = new deck.MapboxOverlay({ interleaved: true, layers: [], getTooltip: tooltip3d });
+    mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    // Luz de sol de la tarde desde el suroeste: las fachadas se leen como volúmenes, no como manchas planas
+    const luz = new deck.LightingEffect({
+      ambiente: new deck.AmbientLight({ color: [255, 250, 240], intensity: 1.15 }),
+      sol: new deck.DirectionalLight({ color: [255, 236, 210], intensity: 1.6, direction: [-3, -4, -6] }),
+      relleno: new deck.DirectionalLight({ color: [210, 225, 255], intensity: 0.5, direction: [3, 2, -2] }),
+    });
+    capa3d = new deck.MapboxOverlay({ interleaved: true, layers: [], effects: [luz], getTooltip: tooltip3d });
     mapa3d.addControl(capa3d);
     document.getElementById('m3-incl').onclick = () => mapa3d.easeTo({ pitch: 55, bearing: -20, duration: 900 });
     document.getElementById('m3-plano').onclick = () => mapa3d.easeTo({ pitch: 0, bearing: 0, duration: 900 });
@@ -431,6 +453,7 @@ function iniciar3d() {
         mapa3d.setPaintProperty(l.id, 'text-halo-color', '#ffffff'); mapa3d.setPaintProperty(l.id, 'text-halo-width', 1.6);
       });
       pintar3d();
+      if (!sinMovimiento) mapa3d.easeTo({ pitch: 52, bearing: -18, zoom: 11.35, duration: 2400, easing: t => 1 - Math.pow(1 - t, 3) });
     });
   }).catch(() => { document.getElementById('m3-cargando').textContent = 'No se pudo cargar el mapa 3D. Revisa tu conexión y recarga la página.'; });
 }
@@ -441,7 +464,7 @@ function tooltip3d({ object, layer }) {
   if (layer.id === 'agebs' && m3Alt === 'negocios' && m3T) { const p = object.properties, k = p._k;
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br><b>${m3T.cuenta[k]} negocios</b> de ${CORTO[m3Ind]} registrados hasta ${m3Anio}` +
       (m3T.nuevos[k] ? `<br><span style="color:#b07a10">+${m3T.nuevos[k]} se sumaron en ${m3Anio}</span>` : '') +
-      (m3T.quitados[k] ? `<br><span style="color:#c2412d">−${m3T.quitados[k]} ya no aparecen (estaban en 2024)</span>` : '') + `<br>En 2024: ${m3T.c24[k]} · en 2026: ${m3T.c26[k]} · Nivel ${p.nse} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
+      (m3T.quitados[k] ? `<br><span style="color:#2b2724">−${m3T.quitados[k]} ya no aparecen (estaban en 2024)</span>` : '') + `<br>En 2024: ${m3T.c24[k]} · en 2026: ${m3T.c26[k]} · Nivel ${p.nse} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
@@ -452,15 +475,20 @@ function tooltip3d({ object, layer }) {
 function opciones3d() {
   const el = document.getElementById('m3-opciones');
   if (m3Modo === 'zonas') {
-    el.innerHTML = `<p class="selector-tit">Altura y color</p><select id="m3-alt">${Object.entries(ALTURAS).map(([k, v]) => `<option value="${k}" ${k === m3Alt ? 'selected' : ''}>${v.nombre}</option>`).join('')}</select>`;
+    el.innerHTML = `<select id="m3-alt" aria-label="Qué muestra la altura">${Object.entries(ALTURAS).map(([k, v]) => `<option value="${k}" ${k === m3Alt ? 'selected' : ''}>${v.nombre}</option>`).join('')}</select>`;
     el.querySelector('#m3-alt').onchange = e => { m3Alt = e.target.value; pintar3d(); };
   } else if (m3Modo === 'cambios') {
-    el.innerHTML = `<p class="selector-tit">Mostrar</p><label class="check"><input type="checkbox" id="m3-ap" ${m3Ver.aparecio ? 'checked' : ''}> <span class="punto" style="background:#2f9e5b"></span>Aparecieron</label>` +
+    el.innerHTML = `<label class="check"><input type="checkbox" id="m3-ap" ${m3Ver.aparecio ? 'checked' : ''}> <span class="punto" style="background:#2f9e5b"></span>Aparecieron</label>` +
       `<label class="check"><input type="checkbox" id="m3-des" ${m3Ver.desaparecio ? 'checked' : ''}> <span class="punto" style="background:#c2412d"></span>Desaparecieron</label>`;
     el.querySelector('#m3-ap').onchange = e => { m3Ver.aparecio = e.target.checked; pintar3d(); };
     el.querySelector('#m3-des').onchange = e => { m3Ver.desaparecio = e.target.checked; pintar3d(); };
   } else el.innerHTML = '';
 }
+// Lista del top 5: cada nombre es un botón que lleva el mapa a esa zona
+function listaTop(filas) {
+  return `<ol class="m3-top">${filas.map(x => `<li><button data-k="${x.p._k}">${esc(x.p.colonia || 'AGEB ' + x.p.clave)}</button><span>${x.t}</span></li>`).join('')}</ol>`;
+}
+document.getElementById('m3-info').addEventListener('click', e => { const b = e.target.closest('.m3-top button'); if (b) irAgeb(+b.dataset.k); });
 function pararPlay(repintar) { if (m3Play) { clearInterval(m3Play); m3Play = null; document.getElementById('m3-play').textContent = '▶'; if (repintar) pintar3d(); } }
 
 function pintar3d() {
@@ -477,29 +505,32 @@ function pintar3d() {
     const valorHoy = p => (conTiempo ? m3T.cuenta[p._k] : A3.valor(p));
     const cambioA = p => { if (!conTiempo || m3Anio >= 2026) return 0; const k = p._k, a = m3T.nuevos[k], q = m3T.quitados[k]; return q > a ? -1 : a > 0 ? 1 : 0; };
     if (!G_ENC) G_ENC = { type: 'FeatureCollection', features: G.features.map(f => encoger(f)) };
-    capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.85, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
-      getElevation: f => { const v = valorHoy(f.properties); return v == null || (conTiempo && v === 0) ? 0 : 20 + 1500 * v / max; },
-      getFillColor: f => (cambioA(f.properties) === 1 ? [224, 165, 38, 245] : cambioA(f.properties) === -1 ? [194, 65, 45, 235] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 110] : colorEscala(q(valorHoy(f.properties)))),
-      getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.55, diffuse: 0.6, shininess: 20 },
-      transitions: conTiempo ? { getElevation: { duration: 650 }, getFillColor: { duration: 400 } } : {},
+    capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.95, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
+      getElevation: f => { const v = valorHoy(f.properties); return v == null || (conTiempo && v === 0) ? 0 : 30 + 1800 * v / max; },
+      getFillColor: f => (cambioA(f.properties) === 1 ? [...C_SUMO, 250] : cambioA(f.properties) === -1 ? [...C_PERDIO, 240] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 90] : colorEscala(q(valorHoy(f.properties)))),
+      getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.45, diffuse: 0.7, shininess: 28, specularColor: [255, 245, 230] },
+      transitions: { getElevation: { duration: sinMovimiento ? 0 : 650 }, getFillColor: { duration: sinMovimiento ? 0 : 400 } },
       updateTriggers: { getElevation: [m3Alt, m3Ind, m3Anio], getFillColor: [m3Alt, m3Ind, m3Anio] } })];
-    ley.innerHTML = `<p class="nota"><b>${A3.nombre}</b> · ${CORTO[m3Ind]}<br>Más alta y más oscura = mayor valor. El color compara cada AGEB con el resto de la ciudad.</p>` +
-      `<div class="m3-grad"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>` +
-      (conTiempo ? `<p class="nota" style="margin-top:8px"><b>Línea de tiempo:</b> mueve la barra de abajo del mapa o dale ▶ para ver cómo crecen los edificios con los negocios registrados cada año. Incluye a los que ya cerraron: los que estaban en el DENUE 2024 y ya no en el de 2026 se quitan en 2025.<br><span class="m3-dorado">■</span> AGEB que sumó negocios ese año · <span style="color:#c2412d">■</span> AGEB que perdió negocios ese año</p>` : '');
+    const lc = `style="--c:var(--${ABR[m3Ind]})"`;
+    ley.innerHTML = `<p class="nota">Cada bloque es una AGEB. Más alto y más oscuro, mayor valor comparado con el resto de la ciudad.</p>` +
+      `<div class="m3-grad" style="background:${gradienteCSS()}"></div><div class="m3-grad-et"><span>Menor</span><span>Mayor</span></div>` +
+      (conTiempo ? `<p class="nota" style="margin-top:6px"><span class="m3-dorado">■</span> sumó negocios ese año &nbsp; <span style="color:#2b2724">■</span> perdió negocios ese año</p>` : '');
     if (conTiempo) {
       document.getElementById('m3-lt-anio').textContent = m3Anio;
-      document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(m3T.total)} negocios en ${m3Anio}` + (m3T.nuevosTot && m3Anio < 2026 ? ` · <b class="m3-dorado">+${fmt(m3T.nuevosTot)} ese año</b>` : '') + (m3T.quitadosTot ? ` · <b style="color:#c2412d">−${fmt(m3T.quitadosTot)} ya no aparecen</b>` : '');
+      document.getElementById('m3-lt-cuenta').innerHTML = `${fmt(m3T.total)} negocios en ${m3Anio}` + (m3T.nuevosTot && m3Anio < 2026 ? ` · <b class="m3-dorado">+${fmt(m3T.nuevosTot)} ese año</b>` : '') + (m3T.quitadosTot ? ` · <b style="color:#2b2724">−${fmt(m3T.quitadosTot)} ya no aparecen</b>` : '');
       document.getElementById('m3-anio').value = m3Anio;
       const lista = G.features.map(f => ({ p: f.properties, v: m3T.cuenta[f.properties._k] })).filter(x => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 5), maxA = m3T.acum[16] || 1;
-      info.innerHTML = `<h5>Las 5 más altas en ${m3Anio}</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${x.v} negocios</li>`).join('')}</ol>` +
-        `<p class="selector-tit" style="margin:10px 0 0">Acumulado por año</p>` +
+      info.innerHTML = `<div ${lc}><h5>Las 5 zonas más altas en ${m3Anio}</h5>${listaTop(lista.map(x => ({ p: x.p, t: x.v + (x.v === 1 ? ' negocio' : ' negocios') })))}</div>` +
+        `<div><h5>Negocios de ${CORTO[m3Ind].toLowerCase()} acumulados por año</h5>` +
         `<div class="m3-hist">${m3T.acum.map((v, k) => `<i title="${2010 + k}: ${v} negocios" class="${2010 + k === m3Anio ? 'on' : 2010 + k < m3Anio ? 'pasado' : ''}" style="height:${4 + 46 * v / maxA}px"></i>`).join('')}</div>` +
-        `<div class="m3-grad-et"><span>2010</span><span>2026</span></div>` +
-        `<p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años. Solo tenemos el DENUE de 2024 y de 2026: los que cerraron entre esas dos ediciones se quitan en 2025, pero los que cerraron antes de 2024 no aparecen en ningún año.</p>`;
+        `<div class="m3-grad-et"><span>2010</span><span>2026</span></div></div>` +
+        `<div><h5>Cómo leer la línea de tiempo</h5><p class="nota">Mueve la barra de abajo del mapa o dale ▶ para ver cómo crecen los bloques con los negocios registrados cada año. Los que estaban en el DENUE 2024 y ya no en el de 2026 se quitan en 2025.</p><p class="aviso">Ojo: es la fecha en que el INEGI <b>registró</b> el negocio, no cuando abrió. El INEGI registra por tandas (2010, 2014, 2019 y 2024), por eso hay saltos grandes en esos años. Solo tenemos el DENUE de 2024 y de 2026: los que cerraron entre esas dos ediciones se quitan en 2025, pero los que cerraron antes de 2024 no aparecen en ningún año.</p></div>`;
     } else {
       const top = G.features.map(f => ({ p: f.properties, v: A3.valor(f.properties) })).filter(x => x.v != null).sort((a, b) => b.v - a.v);
       const vistos = new Set(), lista = []; for (const x of top) { const c = x.p.colonia || 'AGEB ' + x.p.clave; if (!vistos.has(c)) { vistos.add(c); lista.push(x); } if (lista.length === 5) break; }
-      info.innerHTML = `<h5>Las 5 más altas</h5><ol>${lista.map(x => `<li>${esc(x.p.colonia || 'AGEB ' + x.p.clave)} · ${A3.fmt(x.v)}</li>`).join('')}</ol>`;
+      info.innerHTML = `<div ${lc}><h5>Las 5 zonas más altas</h5>${listaTop(lista.map(x => ({ p: x.p, t: A3.fmt(x.v) })))}</div>` +
+        `<div><h5>Qué mide la altura</h5><p class="nota"><b>${A3.nombre}</b> de ${CORTO[m3Ind].toLowerCase()}. Cambia la medida en el selector de la tarjeta del mapa.</p></div>` +
+        `<div><h5>Cómo moverte</h5><p class="nota">Arrastra para mover el mapa, clic derecho y arrastra (o Ctrl + arrastrar) para girarlo e inclinarlo. Toca una zona de la lista para ir directo a ella.</p></div>`;
     }
   } else {
     const filas = CB.filas.filter(f => f[2] === ii), ap = filas.filter(f => f[3] === 0).length, des = filas.length - ap;
@@ -508,8 +539,8 @@ function pintar3d() {
       getElevation: f => 250 + 120 * Math.sqrt(TAM_MED[f[5]] || 3), getFillColor: f => (f[3] === 0 ? [47, 158, 91, 230] : [194, 65, 45, 230]),
       updateTriggers: { getFillColor: [m3Ind] } })];
     ley.innerHTML = `<p class="nota">Cada columna es un negocio; la altura indica su tamaño (personal).</p>`;
-    info.innerHTML = `<div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
-      `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p>`;
+    info.innerHTML = `<div><h5>Saldo 2024 → 2026</h5><div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
+      `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p></div>`;
   }
   const ltVisible = m3Modo === 'zonas' && m3Alt === 'negocios';
   if (!ltVisible) { pararPlay(); m3T = null; }
