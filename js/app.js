@@ -452,6 +452,8 @@ function iniciar3d() {
       capasBase.filter(l => l.type === 'symbol' && /road|street|calle/i.test(l.id)).forEach(l => {
         mapa3d.setPaintProperty(l.id, 'text-halo-color', '#ffffff'); mapa3d.setPaintProperty(l.id, 'text-halo-width', 1.6);
       });
+      agregarEdificios();
+      mapa3d.on('zoom', aplicarZoom3d);
       pintar3d();
       if (!sinMovimiento) mapa3d.easeTo({ pitch: 52, bearing: -18, zoom: 11.35, duration: 2400, easing: t => 1 - Math.pow(1 - t, 3) });
     });
@@ -545,7 +547,39 @@ function pintar3d() {
   const ltVisible = m3Modo === 'zonas' && m3Alt === 'negocios';
   if (!ltVisible) { pararPlay(); m3T = null; }
   document.getElementById('m3-lt').hidden = !ltVisible;
-  capa3d.setProps({ layers: capas.map(c => c.clone({ beforeId: m3Etiquetas })) });
+  m3Capas = capas;
+  aplicarZoom3d();
+}
+
+// Edificios reales de OpenStreetMap (vía OpenFreeMap) al acercarse a nivel de calle. Como nuestros bloques miden cientos de metros
+// (son datos, no construcciones), al acercarse se aplanan hasta quedar como un piso de color con los edificios reales encima;
+// al alejarse vuelven a crecer.
+const Z_CALLE = [13.4, 14.6];
+let m3Capas = [];
+function vistaCalle(z) {
+  const t = Math.max(0, Math.min(1, (z - Z_CALLE[0]) / (Z_CALLE[1] - Z_CALLE[0])));
+  return m3Modo === 'cambios' ? { opacity: 1 - 0.15 * t, elevationScale: 1 - 0.85 * t }
+    : { opacity: 0.95 - 0.4 * t, elevationScale: Math.max(0.002, 1 - t) };
+}
+function aplicarZoom3d() {
+  if (!capa3d) return;
+  const v = vistaCalle(mapa3d.getZoom());
+  capa3d.setProps({ layers: m3Capas.map(c => c.clone({ beforeId: m3Etiquetas, ...v })) });
+  const aviso = document.getElementById('m3-calle');
+  if (aviso) aviso.hidden = mapa3d.getZoom() < Z_CALLE[1] - 0.3;
+}
+function agregarEdificios() {
+  mapa3d.addSource('osm-edificios', { type: 'vector', url: 'https://tiles.openfreemap.org/planet',
+    attribution: '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a>' });
+  mapa3d.addLayer({ id: 'edificios-3d', type: 'fill-extrusion', source: 'osm-edificios', 'source-layer': 'building', minzoom: Z_CALLE[0],
+    filter: ['!=', ['get', 'hide_3d'], true],
+    paint: {
+      'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 6], 4, '#e4ddd0', 12, '#d6cdbd', 40, '#bfb3a0'],
+      // la mayoría de los edificios de Mérida no tienen altura registrada en OpenStreetMap: OpenMapTiles les pone una altura estándar
+      'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+      'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+      'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], Z_CALLE[0], 0, Z_CALLE[1], 0.92],
+    } }, m3Etiquetas);
 }
 
 /* ===================== SIMULADOR DE LOCAL (MODELO DE HUFF) ===================== */

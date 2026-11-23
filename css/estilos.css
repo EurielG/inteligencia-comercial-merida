@@ -306,6 +306,9 @@ details p { font-size: 14px; color: var(--tinta-2); margin: 6px 0 2px; }
 .m3-botones button { background: #fffdf9; border: 1px solid var(--linea); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 .m3-botones button:hover { background: var(--crema); }
 #m3-cargando { display: none; }
+.m3-calle { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); z-index: 5; margin: 0; max-width: min(520px, calc(100% - 28px));
+  background: rgba(31,61,51,.92); color: #f7f2e9; font-size: 12.5px; line-height: 1.4; padding: 8px 14px; border-radius: 12px; text-align: center; }
+.m3-calle[hidden] { display: none; }
 .m3-grad { height: 8px; border-radius: 4px; margin-top: 6px; }
 .m3-grad-et { display: flex; justify-content: space-between; font-size: 11px; color: var(--tinta-2); }
 .m3-info { display: grid; grid-template-columns: 1.1fr 1fr 1.3fr; gap: 16px; margin-top: 16px; font-size: 13.5px; }
