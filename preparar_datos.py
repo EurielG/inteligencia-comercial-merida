@@ -167,6 +167,13 @@ conc = {'industrias': {i: hhi(g) for i, g in mc.groupby('industria')},
 print({k: v['hhi'] for k, v in conc['industrias'].items()})
 
 # ---------------- Etapa 3: zonas a 1.5 km por AGEB ----------------
+def SAT_REGLA(neg, idx):
+    # Zona saturada (Guía de la Etapa 3, paso 5): AGEB habitada (100+ viviendas) que está en el 25% de AGEB habitadas con más
+    # negocios de la industria y tiene un índice menor a 0.5
+    hab_ = A['viviendas'].values >= 100
+    return hab_ & (neg >= np.percentile(neg[hab_], 75)) & (idx < 0.5)
+
+
 geo = json.load(open(os.path.join(DATOS, 'ageb_merida_2020.geojson')))
 nse = pd.read_csv(os.path.join(DATOS, 'nse_amai_merida.csv'), dtype=str)
 nse['clave'] = nse['loc'].str.zfill(4) + '-' + nse['ageb'].str.zfill(4)
@@ -179,21 +186,40 @@ d26['clave'] = (pd.to_numeric(d26['cve_loc'], errors='coerce').astype('Int64').a
                 d26['ageb'].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(4))
 colonia = d26.groupby('clave')['nomb_asent'].agg(lambda s: s.dropna().astype(str).str.title().mode().iat[0] if s.notna().any() else '')
 
+def centroide(g):
+    """Centro geométrico (centroide de área) del polígono, igual que geopandas .centroid. Antes se usaba el promedio de los
+    vértices del contorno, que se corre hacia los lados con más puntos (calles curvas) y cambiaba qué hogares y negocios
+    caían en el radio de 1.5 km. Con el centroide de área los resultados coinciden con el reporte de la Etapa 3."""
+    polis = [g['coordinates']] if g['type'] == 'Polygon' else g['coordinates']
+    a = cx = cy = 0.0
+    for poli in polis:
+        for k, anillo in enumerate(poli):
+            sg = -1 if k > 0 else 1          # los huecos restan
+            r = np.array(anillo); x0, y0, x1, y1 = r[:, 0], r[:, 1], np.roll(r[:, 0], -1), np.roll(r[:, 1], -1)
+            c = x0 * y1 - x1 * y0
+            a += sg * c.sum(); cx += sg * ((x0 + x1) * c).sum(); cy += sg * ((y0 + y1) * c).sum()
+    a /= 2
+    return cy / (6 * a), cx / (6 * a)
+
+
 agebs = []
 for f in geo['features']:
     p = f['properties']; clave = p['CVE_LOC'] + '-' + p['CVE_AGEB']
-    ring = np.array(f['geometry']['coordinates'][0] if f['geometry']['type'] == 'Polygon' else f['geometry']['coordinates'][0][0])
-    agebs.append({'clave': clave, 'lon': ring[:, 0].mean(), 'lat': ring[:, 1].mean()})
+    la, lo = centroide(f['geometry'])
+    agebs.append({'clave': clave, 'lon': lo, 'lat': la})
 A = pd.DataFrame(agebs).set_index('clave')
 A = A.join(nse[['AB', 'C+', 'C', 'C-', 'D+', 'D', 'E', 'viviendas', 'objetivo', 'nivel_predominante']], how='left')
 A[['objetivo', 'viviendas']] = A[['objetivo', 'viviendas']].fillna(0)
 A['colonia'] = colonia.reindex(A.index).fillna('')
 
 DM = haversine(A['lat'].values[:, None], A['lon'].values[:, None], A['lat'].values[None, :], A['lon'].values[None, :])
-hog_total = A['objetivo'].sum()
+# Referencia de la ciudad: hogares objetivo de todo el archivo de la AMAI (92,278), como en el reporte de la Etapa 3
+hog_total = nse['objetivo'].sum()
+# Competencia = negocios privados (el sector público no compite por el cliente igual), como en el reporte de la Etapa 3
+priv = foco[~foco['nombre_act'].map(norm).str.contains('sector publico')]
 zonas_res = {}
 for ind in FOCO:
-    pts = foco[foco['industria'] == ind]
+    pts = priv[priv['industria'] == ind]
     dn = haversine(A['lat'].values[:, None], A['lon'].values[:, None], pts['lat'].values[None, :], pts['lon'].values[None, :])
     ref = hog_total / len(pts)
     res = {}
@@ -203,10 +229,18 @@ for ind in FOCO:
         res[rad] = (hog, neg, (hog / (neg + 1)) / ref)
     hog, neg, idx = res[1.5]
     eleg = (hog >= 3000) & (A['viviendas'].values >= 100)
-    robust = sum((res[r][2] >= 1.5) for r in (1.0, 1.5, 2.0)) >= 2
-    sat = (neg >= np.percentile(neg, 75)) & (idx < 0.5)
+    # Robustez (Guía de la Etapa 3, paso 7): la zona queda en el 20% mejor entre las elegibles en al menos 2 de los radios
+    # 1, 1.5 y 2 km (el mínimo de hogares se escala con el área del círculo)
+    top = []
+    for rad in (1.0, 1.5, 2.0):
+        h_r, _, i_r = res[rad]
+        ok = eleg & (h_r >= 3000 * (rad / 1.5) ** 2)
+        rango = pd.Series(i_r[ok]).rank(pct=True, ascending=False).values
+        t = np.zeros(len(A), bool); t[np.where(ok)[0]] = rango <= 0.2; top.append(t)
+    robust = sum(top) >= 2
+    sat = SAT_REGLA(neg, idx)
     est = np.where(eleg & (idx >= 1.5) & robust, 'recomendada', np.where(sat, 'saturada', 'neutral'))
-    zonas_res[ind] = {'hog': hog, 'neg': neg, 'idx': idx, 'estado': est, 'ref': ref}
+    zonas_res[ind] = {'hog': hog, 'neg': neg, 'idx': idx, 'estado': est, 'ref': ref, 'negocios_priv': len(pts)}
     print(ind, 'ref', round(ref), 'recomendadas', (est == 'recomendada').sum(), 'saturadas', (est == 'saturada').sum())
 
 # ---------------- Índice de potencial por AGEB (sección 05) ----------------
@@ -259,7 +293,7 @@ FACT = list(PESOS)
 percentil = lambda v: pd.Series(v).rank(pct=True).values
 ip, ip_fac, potencial = {}, {}, {'pesos': PESOS, 'industrias': {}}
 for ind in FOCO:
-    neg = cerca(foco[foco['industria'] == ind], A['lat'].values, A['lon'].values)
+    neg = cerca(priv[priv['industria'] == ind], A['lat'].values, A['lon'].values)
     bruto = {'competencia': obj15 / (neg + 1), 'demanda': obj15, 'crecimiento': crec_act, 'nivel': pct_obj}
     sc = {k: np.full(len(A), np.nan) for k in FACT}
     for k in FACT: sc[k][hab] = 100 * percentil(bruto[k][hab])
@@ -341,7 +375,7 @@ feats = []
 for k, f in enumerate(geo['features']):
     p = f['properties']; clave = p['CVE_LOC'] + '-' + p['CVE_AGEB']; a = A.loc[clave]
     coords = json.loads(json.dumps(f['geometry']['coordinates']), parse_float=lambda x: round(float(x), 5))
-    props = {'clave': clave, 'colonia': a['colonia'], 'nse': a['nivel_predominante'] if isinstance(a['nivel_predominante'], str) else 'Sin dato',
+    props = {'clave': clave, 'lat': round(float(a['lat']), 5), 'lon': round(float(a['lon']), 5), 'colonia': a['colonia'], 'nse': a['nivel_predominante'] if isinstance(a['nivel_predominante'], str) else 'Sin dato',
              'viviendas': int(a['viviendas']), 'objetivo': int(a['objetivo']), 'perfil': PERFIL.get(clave, ''),
              'mix': [int(v) for v in mezcla.loc[clave]] if clave in mezcla.index else [0] * (len(IND10) + 1)}
     for ind in FOCO:
