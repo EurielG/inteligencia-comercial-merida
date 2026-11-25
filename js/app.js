@@ -380,7 +380,13 @@ function encoger(f, k = 0.82) {
   const nuevo = anillos.map(p => p.map(r => r.map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k])));
   return { ...f, geometry: { type: 'MultiPolygon', coordinates: nuevo } };
 }
-let G_ENC = null;
+let G_ENC = null, AGEB_CB = null, m3CB = null;
+const RAMPA_SUMA_HEX = ['#d4e8d2', '#93c79c', '#4f9d68', '#2b7346', '#16452a'], RAMPA_RESTA_HEX = ['#f2d7cc', '#e3a189', '#cc6b4f', '#a3402b', '#5c1f12'];
+const RAMPA_SUMA = RAMPA_SUMA_HEX.map(hexRgb), RAMPA_RESTA = RAMPA_RESTA_HEX.map(hexRgb);
+function colorRampa(R, t) {
+  const x = Math.max(0, Math.min(1, t)) * (R.length - 1), i = Math.min(Math.floor(x), R.length - 2), f = x - i;
+  return R[i].map((c, k) => Math.round(c + (R[i + 1][k] - c) * f)).concat(245);
+}
 // AGEB de cada negocio (punto en polígono, una sola vez) para contar cuántos había en cada AGEB en cada año
 G.features.forEach((f, k) => { f.properties._k = k; });
 let AGEB_NEG = null, AGEB_IDOS = null;
@@ -471,6 +477,9 @@ function tooltip3d({ object, layer }) {
   if (layer.id === 'agebs') { const p = object.properties, v = ALTURAS[m3Alt].valor(p);
     return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Nivel ${p.nse} · ${fmt(p.viviendas)} viviendas<br>${v == null ? 'Sin dato (menos de 100 viviendas)' : ALTURAS[m3Alt].fmt(v)}` +
       `<br>${p.mix[MIX.indexOf(m3Ind)]} negocios de ${CORTO[m3Ind]} · índice de potencial ${p[ABR[m3Ind] + '_ip'] ?? '—'}`); }
+  if (layer.id === 'cambios-agebs' && m3CB) { const p = object.properties, k = p._k, a = m3CB.nAp[k], d = m3CB.nDes[k];
+    return caja(`<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br><span style="color:#2f8c55">+${a} aparecieron</span> · <span style="color:#c2412d">−${d} desaparecieron</span><br>Saldo de ${CORTO[m3Ind]}: <b>${a - d >= 0 ? '+' : ''}${a - d}</b> negocios entre 2024 y 2026`); }
+  if (layer.id === 'cambios') object = object.f;
   if (layer.id === 'cambios') return caja(`<b>${esc(object[4])}</b><br>${object[3] === 0 ? '🟢 Apareció entre 2024 y 2026' : '🔴 Ya no aparece en 2026'}<br>${object[5]} personas`);
   return null;
 }
@@ -481,7 +490,7 @@ function opciones3d() {
     el.innerHTML = `<select id="m3-alt" aria-label="Qué muestra la altura">${Object.entries(ALTURAS).map(([k, v]) => `<option value="${k}" ${k === m3Alt ? 'selected' : ''}>${v.nombre}</option>`).join('')}</select>`;
     el.querySelector('#m3-alt').onchange = e => { m3Alt = e.target.value; pintar3d(); };
   } else if (m3Modo === 'cambios') {
-    el.innerHTML = `<label class="check"><input type="checkbox" id="m3-ap" ${m3Ver.aparecio ? 'checked' : ''}> <span class="punto" style="background:#2f9e5b"></span>Aparecieron</label>` +
+    el.innerHTML = `<label class="check"><input type="checkbox" id="m3-ap" ${m3Ver.aparecio ? 'checked' : ''}> <span class="punto" style="background:#2f8c55"></span>Aparecieron</label>` +
       `<label class="check"><input type="checkbox" id="m3-des" ${m3Ver.desaparecio ? 'checked' : ''}> <span class="punto" style="background:#c2412d"></span>Desaparecieron</label>`;
     el.querySelector('#m3-ap').onchange = e => { m3Ver.aparecio = e.target.checked; pintar3d(); };
     el.querySelector('#m3-des').onchange = e => { m3Ver.desaparecio = e.target.checked; pintar3d(); };
@@ -536,14 +545,41 @@ function pintar3d() {
         `<div><h5>Cómo moverte</h5><p class="nota">Arrastra para mover el mapa, clic derecho y arrastra (o Ctrl + arrastrar) para girarlo e inclinarlo. Toca una zona de la lista para ir directo a ella.</p></div>`;
     }
   } else {
-    const filas = CB.filas.filter(f => f[2] === ii), ap = filas.filter(f => f[3] === 0).length, des = filas.length - ap;
-    const ver = filas.filter(f => (f[3] === 0 && m3Ver.aparecio) || (f[3] === 1 && m3Ver.desaparecio));
-    capas = [new deck.ColumnLayer({ id: 'cambios', data: ver, getPosition: f => [f[1], f[0]], radius: 55, diskResolution: 12, extruded: true, pickable: true, autoHighlight: true,
-      getElevation: f => 250 + 120 * Math.sqrt(TAM_MED[f[5]] || 3), getFillColor: f => (f[3] === 0 ? [47, 158, 91, 230] : [194, 65, 45, 230]),
-      updateTriggers: { getFillColor: [m3Ind] } })];
-    ley.innerHTML = `<p class="nota">Cada columna es un negocio; la altura indica su tamaño (personal).</p>`;
-    info.innerHTML = `<div><h5>Saldo 2024 → 2026</h5><div class="sim-mini"><div><b style="color:#2f9e5b">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
-      `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p></div>`;
+    // Cambios por AGEB: cada bloque muestra el saldo de la zona (verde = se sumaron negocios, rojo = se perdieron) y su altura
+    // cuántos. Los negocios aparecen como puntos en el piso al acercarse a vista de calle.
+    if (!AGEB_CB) AGEB_CB = agebDe(CB.filas);
+    const n = G.features.length, nAp = new Array(n).fill(0), nDes = new Array(n).fill(0);
+    const filas = CB.filas.map((f, i) => ({ f, k: AGEB_CB[i] })).filter(x => x.f[2] === ii);
+    filas.forEach(({ f, k }) => { if (k >= 0) (f[3] === 0 ? nAp : nDes)[k]++; });
+    const ap = filas.filter(x => x.f[3] === 0).length, des = filas.length - ap;
+    const valor = k => (m3Ver.aparecio ? nAp[k] : 0) - (m3Ver.desaparecio ? nDes[k] : 0);
+    m3CB = { nAp, nDes };
+    const maxAbs = Math.max(1, ...G.features.map(f => Math.abs(valor(f.properties._k))));
+    if (!G_ENC) G_ENC = { type: 'FeatureCollection', features: G.features.map(f => encoger(f)) };
+    const ver = filas.filter(x => (x.f[3] === 0 && m3Ver.aparecio) || (x.f[3] === 1 && m3Ver.desaparecio));
+    capas = [
+      new deck.GeoJsonLayer({ id: 'cambios-agebs', data: G_ENC, extruded: true, opacity: 0.95, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
+        getElevation: f => { const v = valor(f.properties._k); return v === 0 ? 0 : 30 + 1800 * Math.abs(v) / maxAbs; },
+        getFillColor: f => { const v = valor(f.properties._k), k = f.properties._k;
+          if (v === 0) return nAp[k] + nDes[k] ? [226, 214, 190, 170] : [225, 220, 210, 60];
+          return colorRampa(v > 0 ? RAMPA_SUMA : RAMPA_RESTA, 0.25 + 0.75 * Math.abs(v) / maxAbs); },
+        getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.65, diffuse: 0.45, shininess: 0, specularColor: [0, 0, 0] },
+        transitions: { getElevation: { duration: sinMovimiento ? 0 : 650 }, getFillColor: { duration: sinMovimiento ? 0 : 400 } },
+        updateTriggers: { getElevation: [m3Ind, m3Ver.aparecio, m3Ver.desaparecio], getFillColor: [m3Ind, m3Ver.aparecio, m3Ver.desaparecio] } }),
+      new deck.ScatterplotLayer({ id: 'cambios', data: ver, getPosition: x => [x.f[1], x.f[0], 8], radiusUnits: 'pixels', getRadius: 6, stroked: true,
+        getLineColor: [255, 253, 249], lineWidthMinPixels: 1.5, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 255],
+        getFillColor: x => (x.f[3] === 0 ? [47, 140, 85, 255] : [194, 65, 45, 255]), updateTriggers: { getFillColor: [m3Ind] } }),
+    ];
+    ley.innerHTML = `<p class="nota">Cada bloque es una AGEB. Verde: ganó negocios entre 2024 y 2026; rojo: perdió. Más alto y más oscuro, más negocios de diferencia.</p>` +
+      `<div class="m3-grad" style="background:linear-gradient(90deg, ${RAMPA_RESTA_HEX.slice().reverse().join(', ')}, #e2d6be, ${RAMPA_SUMA_HEX.join(', ')})"></div><div class="m3-grad-et"><span>Perdió</span><span>Ganó</span></div>` +
+      `<p class="nota" style="margin-top:6px">Acércate para ver cada negocio como un punto.</p>`;
+    const top = G.features.map(f => ({ p: f.properties, v: valor(f.properties._k) })).filter(x => x.v !== 0);
+    const gano = [...top].sort((a, b) => b.v - a.v).filter(x => x.v > 0).slice(0, 5), perdio = [...top].sort((a, b) => a.v - b.v).filter(x => x.v < 0).slice(0, 5);
+    const signo = v => (v > 0 ? '+' : '−') + Math.abs(v);
+    info.innerHTML = `<div><h5>Saldo 2024 → 2026</h5><div class="sim-mini"><div><b style="color:#2f8c55">+${ap}</b><span>aparecieron</span></div><div><b style="color:#c2412d">−${des}</b><span>desaparecieron</span></div></div>` +
+      `<p class="nota">Saldo: <b>${ap - des >= 0 ? '+' : ''}${ap - des}</b> negocios de ${m3Ind} entre mayo de 2024 y 2026 (DENUE). Un negocio que "desaparece" pudo cerrar, mudarse o cambiar de registro.</p></div>` +
+      `<div style="--c:#2f8c55"><h5>Las zonas que más ganaron</h5>${gano.length ? listaTop(gano.map(x => ({ p: x.p, t: signo(x.v) }))) : '<p class="nota">Ninguna con los filtros elegidos.</p>'}</div>` +
+      `<div style="--c:#c2412d"><h5>Las zonas que más perdieron</h5>${perdio.length ? listaTop(perdio.map(x => ({ p: x.p, t: signo(x.v) }))) : '<p class="nota">Ninguna con los filtros elegidos.</p>'}</div>`;
   }
   const ltVisible = m3Modo === 'zonas' && m3Alt === 'negocios';
   if (!ltVisible) { pararPlay(); m3T = null; }
@@ -559,13 +595,14 @@ const Z_CALLE = [13.4, 14.6];
 let m3Capas = [];
 function vistaCalle(z) {
   const t = Math.max(0, Math.min(1, (z - Z_CALLE[0]) / (Z_CALLE[1] - Z_CALLE[0])));
-  return m3Modo === 'cambios' ? { opacity: 1 - 0.15 * t, elevationScale: 1 - 0.85 * t }
-    : { opacity: 0.95 - 0.4 * t, elevationScale: Math.max(0.002, 1 - t) };
+  return { opacity: 0.95 - 0.4 * t, elevationScale: Math.max(0.002, 1 - t) };
 }
 function aplicarZoom3d() {
   if (!capa3d) return;
   const v = vistaCalle(mapa3d.getZoom());
-  capa3d.setProps({ layers: m3Capas.map(c => c.clone({ beforeId: m3Etiquetas, ...v })) });
+  // los puntos de negocios solo aparecen de cerca; de lejos se ve el bloque de su zona
+  const zz = mapa3d.getZoom(), opPuntos = Math.max(0, Math.min(1, (zz - 12.8) / 0.8));
+  capa3d.setProps({ layers: m3Capas.map(c => c.id === 'cambios' ? c.clone({ beforeId: m3Etiquetas, opacity: opPuntos, visible: opPuntos > 0 }) : c.clone({ beforeId: m3Etiquetas, ...v })) });
   const aviso = document.getElementById('m3-calle');
   if (aviso) aviso.hidden = mapa3d.getZoom() < Z_CALLE[1] - 0.3;
 }
