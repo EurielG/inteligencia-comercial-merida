@@ -260,9 +260,14 @@ function nube() {
     color: () => tonos[Math.floor(Math.random() * tonos.length)], rotateRatio: 0, backgroundColor: '#fffdf9', gridSize: 7, shuffle: false });
 }
 
+// Las reseñas se barajan una vez al cargar la página; al mostrarlas se intercalan por industria (fitness, mascotas, profesionales…)
+// para que el mosaico tenga las tres desde el inicio y no solo las primeras del archivo
+const barajar = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const EJ_GRUPOS = Object.fromEntries(INDS.map(i => [i, barajar(R.sentimiento.ejemplos.filter(e => e.industria === i))]));
 function ejemplos() {
   const q = document.getElementById('buscar').value.trim().toLowerCase();
-  const lista = R.sentimiento.ejemplos.filter(e => activa(e.industria) && e.sentimiento === sentEj && (!q || e.texto.toLowerCase().includes(q)));
+  const grupos = sel.map(i => EJ_GRUPOS[i].filter(e => e.sentimiento === sentEj && (!q || e.texto.toLowerCase().includes(q))));
+  const lista = []; for (let k = 0; grupos.some(g => k < g.length); k++) grupos.forEach(g => { if (k < g.length) lista.push(g[k]); });
   const marcar = t => (q ? esc(t).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`) : esc(t));
   document.getElementById('ejemplos').innerHTML = lista.length
     ? lista.slice(0, 60).map(e => `<div class="resena"><div class="meta"><i class="punto ${ABR[e.industria]}"></i>${CORTO[e.industria]}${e.negocio ? ' · ' + esc(e.negocio) : ''}</div>${marcar(e.texto)}</div>`).join('')
