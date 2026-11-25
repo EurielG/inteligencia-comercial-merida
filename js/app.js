@@ -759,9 +759,10 @@ let mapa, capaAgeb, capaPuntos;
 const NSE_COL = { 'A/B': '#1f3d33', 'C+': '#3f6b55', 'C': '#8fb09b', 'C-': '#d5e2d6', 'D+': '#f0d9b5', 'D': '#dba26b', 'E': '#b5543c', 'Sin dato': '#eeeeee' };
 const indMapa = () => (sel.length === 1 ? sel[0] : sel.includes('Servicios para mascotas') ? 'Servicios para mascotas' : sel[0]);
 
+let expInd = 'Servicios para mascotas';
 const MIX = R.industrias_mezcla;
 const PCT_COL = [['#f6f3ee', 'Menos de 10 negocios en la AGEB'], ['#ece6da', '0%'], ['#d6e4ef', 'Menos de 1%'], ['#9cc3dd', '1% a 3%'], ['#4f8fbf', '3% a 6%'], ['#1f4f7a', '6% o más']];
-function pctInd(p) { const tot = p.mix.reduce((a, b) => a + b, 0); return { tot, n: p.mix[MIX.indexOf(indMapa())], pct: tot ? 100 * p.mix[MIX.indexOf(indMapa())] / tot : 0 }; }
+function pctInd(p) { const tot = p.mix.reduce((a, b) => a + b, 0); return { tot, n: p.mix[MIX.indexOf(expInd)], pct: tot ? 100 * p.mix[MIX.indexOf(expInd)] / tot : 0 }; }
 function colorPct(p) {
   const { tot, n, pct } = pctInd(p);
   return tot < 10 ? PCT_COL[0][0] : n === 0 ? PCT_COL[1][0] : pct < 1 ? PCT_COL[2][0] : pct < 3 ? PCT_COL[3][0] : pct < 6 ? PCT_COL[4][0] : PCT_COL[5][0];
@@ -777,7 +778,7 @@ function mezclaHtml(p) {
 }
 
 function colorOport(p) {
-  const t = ABR[indMapa()], est = p[t + '_est'], idx = p[t + '_idx'];
+  const t = ABR[expInd], est = p[t + '_est'], idx = p[t + '_idx'];
   if (p.objetivo === 0 && p.viviendas < 100) return '#f1ede6';
   if (est === 'recomendada') return '#2f7a4b';
   if (est === 'saturada') return '#c2412d';
@@ -790,7 +791,7 @@ function estilo(f) {
   return { weight: 0.6, color: '#fffdf9', fillOpacity: capaMapa === 'perfil' && !p.perfil ? 0.4 : 0.75, fillColor: fill };
 }
 function popupAgeb(p) {
-  const i = indMapa(), t = ABR[i], est = { recomendada: 'zona recomendada', saturada: 'zona saturada', neutral: 'sin señal clara' }[p[t + '_est']];
+  const i = expInd, t = ABR[i], est = { recomendada: 'zona recomendada', saturada: 'zona saturada', neutral: 'sin señal clara' }[p[t + '_est']];
   return `<b>${esc(p.colonia || 'AGEB ' + p.clave)}</b><br>Tipo de territorio: ${p.perfil ? p.perfil + ' · ' + PERFILES[p.perfil][0] : 'sin perfil (menos de 30 negocios)'}<br>` +
     `Nivel socioeconómico: ${p.nse} · ${fmt(p.viviendas)} viviendas (${fmt(p.objetivo)} A/B o C+)<hr style="margin:6px 0;border:0;border-top:1px solid #ddd">` +
     `<b>${i}</b> a 1.5 km: ${fmt(p[t + '_hog'])} hogares objetivo y ${p[t + '_neg']} negocios → ${p[t + '_idx']}x el promedio, ${est}` +
@@ -802,24 +803,24 @@ function leyenda() {
     : capaMapa === 'perfil' ? Object.entries(PERFILES).map(([k, v]) => [PCOL[k], `${k} · ${v[0]}`]).concat([['#ebe6dd', 'Sin perfil']])
     : capaMapa === 'mezcla' ? PCT_COL.map(([c, t]) => [c, t])
     : [['#2f7a4b', 'Recomendada'], ['#9cc7a6', 'Arriba del promedio'], ['#f0d58c', '0.5 a 1 vez el promedio'], ['#e8a77f', 'Menos de la mitad'], ['#c2412d', 'Saturada'], ['#f1ede6', 'Casi sin viviendas']];
-  document.getElementById('leyenda').innerHTML = (['oportunidad', 'mezcla'].includes(capaMapa) ? `<p class="nota"><b>${indMapa()}</b>${sel.length > 1 ? ' (elige una sola industria en el menú para cambiarla)' : ''}</p>` : '') +
+  document.getElementById('leyenda').innerHTML = 
     filas.map(([c, t]) => `<div class="fila"><span class="caja-l" style="background:${c}"></span>${t}</div>`).join('');
   document.getElementById('nota-mapa').textContent = capaMapa === 'oportunidad'
     ? 'Oportunidad: hogares de nivel A/B y C+ por negocio en 1.5 km, comparado con el promedio de la ciudad. Recomendada: 3,000+ hogares objetivo, 1.5 veces o más el promedio y estable con radios de 1 a 2 km. Saturada: mucha oferta y menos de la mitad del promedio.'
-    : capaMapa === 'mezcla' ? `Porcentaje de los negocios de cada AGEB que son de ${indMapa()} (DENUE 2026). Da clic en una AGEB para ver cómo se reparten sus negocios entre las 10 industrias.`
+    : capaMapa === 'mezcla' ? `Porcentaje de los negocios de cada AGEB que son de ${expInd} (DENUE 2026). Da clic en una AGEB para ver cómo se reparten sus negocios entre las 10 industrias.`
     : capaMapa === 'perfil' ? 'Tipos de territorio de la Etapa 1: agrupamiento k-means de las AGEB con 30 o más negocios, ordenados del más central (A) al más periférico (D).'
     : 'Nivel socioeconómico predominante de cada AGEB según la regla AMAI, con base en el Censo 2020.';
 }
 function indicadores() {
-  const t = ABR[indMapa()], cuenta = e => G.features.filter(f => f.properties[t + '_est'] === e).length;
+  const t = ABR[expInd], cuenta = e => G.features.filter(f => f.properties[t + '_est'] === e).length;
   document.getElementById('indicadores').innerHTML =
-    `<div><b>${fmt(N.filas.filter(f => activa(N.industrias[f[2]])).length)}</b><span>negocios</span></div>` +
+    `<div><b>${fmt(N.filas.filter(f => N.industrias[f[2]] === expInd).length)}</b><span>negocios de ${CORTO[expInd].toLowerCase()}</span></div>` +
     `<div><b>${fmt(G.features.reduce((a, f) => a + f.properties.objetivo, 0))}</b><span>viviendas A/B y C+</span></div>` +
-    (capaMapa === 'mezcla' ? `<div><b>${(100 * N.filas.filter(f => N.industrias[f[2]] === indMapa()).length / G.features.reduce((a, f) => a + f.properties.mix.reduce((x, y) => x + y, 0), 0)).toFixed(1)}%</b><span>de los negocios de Mérida son de esta industria</span></div><div><b>${G.features.filter(f => pctInd(f.properties).n > 0).length}</b><span>AGEB con al menos uno</span></div>`
+    (capaMapa === 'mezcla' ? `<div><b>${(100 * N.filas.filter(f => N.industrias[f[2]] === expInd).length / G.features.reduce((a, f) => a + f.properties.mix.reduce((x, y) => x + y, 0), 0)).toFixed(1)}%</b><span>de los negocios de Mérida son de esta industria</span></div><div><b>${G.features.filter(f => pctInd(f.properties).n > 0).length}</b><span>AGEB con al menos uno</span></div>`
       : `<div><b>${cuenta('recomendada')}</b><span>AGEB recomendadas</span></div><div><b>${cuenta('saturada')}</b><span>AGEB saturadas</span></div>`);
 }
 function listaZonas() {
-  const el = document.getElementById('lista-zonas'), i = indMapa(), t = ABR[i];
+  const el = document.getElementById('lista-zonas'), i = expInd, t = ABR[i];
   if (capaMapa === 'oportunidad') {
     const li = f => `<li data-clave="${f.properties.clave}">${esc(f.properties.colonia || f.properties.clave)} · ${f.properties[t + '_idx']}x</li>`;
     el.innerHTML = `<h5>Mejores zonas</h5><ol>${topZonas(i, 'recomendada', 6).map(li).join('')}</ol><h5>Saturadas</h5><ol>${topZonas(i, 'saturada', 5).map(li).join('')}</ol>`;
@@ -830,24 +831,29 @@ function listaZonas() {
   el.querySelectorAll('li').forEach(x => x.addEventListener('click', () => capaAgeb.eachLayer(l => {
     if (l.feature.properties.clave === x.dataset.clave) { mapa.fitBounds(l.getBounds(), { maxZoom: 15 }); l.openPopup(); } })));
 }
+// Solo los negocios de la industria elegida, y apagados al inicio para que se lean los colores de las zonas
 function puntos() {
   if (capaPuntos) mapa.removeLayer(capaPuntos);
+  const n = N.filas.filter(f => N.industrias[f[2]] === expInd).length;
+  document.getElementById('ver-puntos-txt').textContent = `Mostrar los ${fmt(n)} negocios de ${CORTO[expInd].toLowerCase()}`;
   if (!document.getElementById('ver-puntos').checked) return;
   capaPuntos = L.layerGroup();
   N.filas.forEach(([lat, lon, ii, si, nom, per, zona]) => {
-    const ind = N.industrias[ii]; if (!activa(ind)) return;
-    L.circleMarker([lat, lon], { radius: 3.5, weight: 0.8, color: '#fff', fillColor: COL[ind], fillOpacity: 0.95 })
+    if (N.industrias[ii] !== expInd) return;
+    L.circleMarker([lat, lon], { radius: 4, weight: 1.2, color: '#fff', fillColor: COL[expInd], fillOpacity: 1 })
       .bindPopup(`<b>${esc(nom)}</b><br>${esc(N.subcategorias[si])}<br>${per} personas · zona ${zona}`).addTo(capaPuntos);
   });
   capaPuntos.addTo(mapa);
 }
 function iniciarMapa() {
-  mapa = L.map('mapa', { scrollWheelZoom: false, zoomControl: true }).setView([21.0, -89.62], 11.5);
+  // Abre centrado en la mancha urbana (no en todo el municipio); se deja espacio a la derecha para el panel
+  mapa = L.map('mapa', { scrollWheelZoom: false, zoomControl: true, zoomSnap: 0.25 }).setView([20.985, -89.585], 12.25);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Mapa base &copy; Esri, HERE, Garmin, &copy; OpenStreetMap', maxZoom: 16 }).addTo(mapa);
   capaAgeb = L.geoJSON(G, { style: estilo, onEachFeature: (f, l) => l.bindPopup(() => popupAgeb(f.properties), { maxWidth: 360, minWidth: 300 }) }).addTo(mapa);
-  mapa.fitBounds(capaAgeb.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [260, 0] });
   document.getElementById('ver-puntos').addEventListener('change', puntos);
+  document.querySelectorAll('#exp-ind button').forEach(b => b.addEventListener('click', () => {
+    expInd = b.dataset.i; document.querySelectorAll('#exp-ind button').forEach(x => x.classList.toggle('on', x === b)); actualizarMapa(); }));
 }
 function actualizarMapa() {
   document.querySelectorAll('#seg-capa button').forEach(b => b.classList.toggle('on', b.dataset.c === capaMapa));

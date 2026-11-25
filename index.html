@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261123d">
+  <link rel="stylesheet" href="css/estilos.css?v=20261125c">
 </head>
 <body>
 <div class="app">
@@ -331,13 +331,18 @@
       <div class="mapa-envoltura">
         <div id="mapa"></div>
         <div class="mapa-panel">
+          <div class="m3-ind" id="exp-ind" role="group" aria-label="Industria">
+            <button data-i="Fitness y deporte" style="--c:var(--fit)">Fitness</button>
+            <button data-i="Servicios para mascotas" style="--c:var(--mas)" class="on">Mascotas</button>
+            <button data-i="Servicios profesionales" style="--c:var(--pro)">Profesionales</button>
+          </div>
           <div class="segmentado vertical" id="seg-capa">
             <button data-c="oportunidad" class="on">Oportunidad</button>
             <button data-c="mezcla">% de la industria</button>
             <button data-c="perfil">Tipo de territorio</button>
             <button data-c="nse">Nivel socioeconómico</button>
           </div>
-          <label class="check"><input type="checkbox" id="ver-puntos" checked> Mostrar negocios</label>
+          <label class="check"><input type="checkbox" id="ver-puntos"> <span id="ver-puntos-txt">Mostrar negocios</span></label>
           <div id="leyenda" class="leyenda"></div>
           <div id="indicadores" class="indicadores"></div>
           <div id="lista-zonas"></div>
@@ -403,6 +408,6 @@
 <script src="data/agebs.js?v=20261111c"></script>
 <script src="data/cambios.js?v=20261111c"></script>
 <script src="data/personas.js?v=20261111c"></script>
-<script src="js/app.js?v=20261125b"></script>
+<script src="js/app.js?v=20261125c"></script>
 </body>
 </html>

@@ -144,8 +144,9 @@ a { color: inherit; }
 
 /* Explorador */
 .mapa-envoltura { position: relative; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--linea); }
-#mapa { height: 640px; }
-.mapa-panel { position: absolute; top: 14px; right: 14px; z-index: 500; width: 270px; max-height: 612px; overflow: auto; background: rgba(255,253,249,.96); border-radius: 14px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); font-size: 13px; }
+#mapa { height: clamp(600px, calc(100vh - 230px), 820px); }
+.mapa-panel .m3-ind { margin-bottom: 10px; }
+.mapa-panel { position: absolute; top: 14px; right: 14px; z-index: 500; width: 290px; max-height: calc(100% - 28px); overflow: auto; background: rgba(255,253,249,.96); border-radius: 14px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); font-size: 13px; }
 .mapa-panel .check { display: block; margin: 10px 0; }
 .leyenda .fila { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
 .leyenda .caja-l { width: 14px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.15); flex: none; }
