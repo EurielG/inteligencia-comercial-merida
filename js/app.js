@@ -425,11 +425,11 @@ function iniciar3d() {
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', attributionControl: { compact: true },
     });
     mapa3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-    // Luz de sol de la tarde desde el suroeste: las fachadas se leen como volúmenes, no como manchas planas
+    // Luz fija y sin brillo: el techo de cada bloque conserva su color real desde cualquier ángulo y las paredes solo se oscurecen un poco
     const luz = new deck.LightingEffect({
-      ambiente: new deck.AmbientLight({ color: [255, 250, 240], intensity: 1.15 }),
-      sol: new deck.DirectionalLight({ color: [255, 236, 210], intensity: 1.6, direction: [-3, -4, -6] }),
-      relleno: new deck.DirectionalLight({ color: [210, 225, 255], intensity: 0.5, direction: [3, 2, -2] }),
+      ambiente: new deck.AmbientLight({ color: [255, 255, 255], intensity: 1 }),
+      sol: new deck.DirectionalLight({ color: [255, 255, 255], intensity: 0.9, direction: [-3, -4, -6] }),
+      relleno: new deck.DirectionalLight({ color: [255, 255, 255], intensity: 0.3, direction: [3, 2, -2] }),
     });
     capa3d = new deck.MapboxOverlay({ interleaved: true, layers: [], effects: [luz], getTooltip: tooltip3d });
     mapa3d.addControl(capa3d);
@@ -511,7 +511,7 @@ function pintar3d() {
     capas = [new deck.GeoJsonLayer({ id: 'agebs', data: G_ENC, extruded: true, opacity: 0.95, pickable: true, autoHighlight: true, highlightColor: [224, 165, 38, 220],
       getElevation: f => { const v = valorHoy(f.properties); return v == null || (conTiempo && v === 0) ? 0 : 30 + 1800 * v / max; },
       getFillColor: f => (cambioA(f.properties) === 1 ? [...C_SUMO, 250] : cambioA(f.properties) === -1 ? [...C_PERDIO, 240] : conTiempo && valorHoy(f.properties) === 0 ? [225, 220, 210, 90] : colorEscala(q(valorHoy(f.properties)))),
-      getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.45, diffuse: 0.7, shininess: 28, specularColor: [255, 245, 230] },
+      getLineColor: [255, 253, 249], lineWidthMinPixels: 0.3, material: { ambient: 0.65, diffuse: 0.45, shininess: 0, specularColor: [0, 0, 0] },
       transitions: { getElevation: { duration: sinMovimiento ? 0 : 650 }, getFillColor: { duration: sinMovimiento ? 0 : 400 } },
       updateTriggers: { getElevation: [m3Alt, m3Ind, m3Anio], getFillColor: [m3Alt, m3Ind, m3Anio] } })];
     const lc = `style="--c:var(--${ABR[m3Ind]})"`;
