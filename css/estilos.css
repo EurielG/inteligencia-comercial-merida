@@ -127,6 +127,13 @@ a { color: inherit; }
 .semaforo td.celda small { display: block; font-weight: 400; font-size: 11px; opacity: .85; }
 .semaforo td.celda:hover { transform: scale(1.03); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 .semaforo td.celda.sel { outline: 3px solid var(--tinta); }
+.semaforo td.celda.pocas { color: var(--tinta); background: repeating-linear-gradient(135deg, rgba(255,253,249,.55) 0 5px, rgba(255,253,249,.2) 5px 10px), var(--fondo);
+  background-blend-mode: normal; box-shadow: inset 0 0 0 1.5px var(--fondo); }
+.semaforo td.celda.pocas { background: repeating-linear-gradient(135deg, rgba(255,253,249,.72) 0 5px, rgba(255,253,249,.5) 5px 10px), var(--fondo); }
+.semaforo td.celda.pocas small { opacity: 1; }
+.nota-pocas { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
+.nota-pocas i { flex: none; width: 26px; height: 16px; border-radius: 4px; background: repeating-linear-gradient(135deg, rgba(255,253,249,.72) 0 5px, rgba(255,253,249,.5) 5px 10px), #b9a46a; box-shadow: inset 0 0 0 1.5px #b9a46a; }
+.aviso-pocas { background: #fbf3dc; border-left: 4px solid #d8a72f; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin: 8px 0 12px; }
 .semaforo td.vacia { color: var(--tinta-2); text-align: center; font-size: 12px; }
 .detalle-tema { margin-top: 14px; }
 .det { background: var(--crema); border-radius: 12px; padding: 16px 18px; }

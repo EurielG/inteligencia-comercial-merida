@@ -204,13 +204,16 @@ function colorQueja(p) { // verde (pocas quejas) → amarillo → rojo (muchas)
   return `rgb(${rgb.join(',')})`;
 }
 
+const POCAS = 30;
 function semaforo() {
   const A = R.sentimiento.aspectos, temas = A[INDS[0]].map(a => a.aspecto);
   const celda = (i, tema) => {
     const a = A[i].find(x => x.aspecto === tema);
-    if (a.menciones < 15) return `<td class="vacia">pocas reseñas</td>`;
+    if (a.menciones < 15) return `<td class="vacia">muy pocas reseñas</td>`;
     const p = Math.round(100 * a.negativas / a.menciones);
     const s = temaSel && temaSel[0] === i && temaSel[1] === tema ? 'sel' : '';
+    // Con menos de POCAS reseñas el porcentaje es frágil: la celda se ve tenue y rayada para que no pese igual que las demás
+    if (a.menciones < POCAS) return `<td class="celda pocas ${s}" data-i="${i}" data-t="${tema}" style="--fondo:${colorQueja(p)}" title="Solo ${a.menciones} reseñas: tómalo con cuidado">${p}%<small>${a.menciones} reseñas · pocos datos</small></td>`;
     return `<td class="celda ${s}" data-i="${i}" data-t="${tema}" style="background:${colorQueja(p)};color:#fff">${p}%<small>${a.menciones} reseñas</small></td>`;
   };
   document.getElementById('semaforo').innerHTML = `<tr><th>Tema</th>${sel.map(i => `<th><i class="punto ${ABR[i]}"></i>${CORTO[i]}</th>`).join('')}</tr>` +
@@ -230,6 +233,7 @@ function detalleTema() {
   const lista = (arr, color) => (arr && arr.length ? arr.map(x => `<blockquote style="--q:${color}">${esc(x)}</blockquote>`).join('') : '<p class="nota">Sin ejemplos claros.</p>');
   el.innerHTML = `<div class="det"><h4>${t} · ${i}</h4>
     <p class="nota">${a.menciones} reseñas lo mencionan; ${Math.round(100 * a.negativas / a.menciones)}% son quejas y ${a.menciones - a.negativas} no.</p>
+    ${a.menciones < POCAS ? `<p class="aviso-pocas"><b>Pocos datos:</b> este porcentaje sale de solo ${a.menciones} reseñas (${a.negativas} quejas). Con tan pocos casos, 3 o 4 reseñas más o menos lo pueden mover más de 10 puntos; tómalo como una señal, no como una conclusión.</p>` : ''}
     <div class="rec"><b>Qué haría un negocio nuevo:</b> ${REC[t]}</div>
     <div class="dos-col"><div><h5 style="color:${SCOL.Negativo}">Lo que reclaman</h5>${lista(ev.Negativo, SCOL.Negativo)}</div>
     <div><h5 style="color:${SCOL.Positivo}">Lo que elogian</h5>${lista(ev.Positivo, SCOL.Positivo)}</div></div></div>`;
