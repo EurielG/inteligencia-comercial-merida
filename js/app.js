@@ -170,8 +170,10 @@ function grafHhi() {
 }
 
 function topZonas(i, est, n) {
-  const t = ABR[i], o = est === 'recomendada' ? 1 : -1, vistas = new Set(), out = [];
-  for (const f of G.features.filter(f => f.properties[t + '_est'] === est).sort((a, b) => o * (b.properties[t + '_idx'] - a.properties[t + '_idx']))) {
+  // Recomendadas: de mayor a menor índice. Saturadas: las que tienen más negocios primero (como en el reporte de la Etapa 3)
+  const t = ABR[i], vistas = new Set(), out = [];
+  const orden = est === 'recomendada' ? (a, b) => b.properties[t + '_idx'] - a.properties[t + '_idx'] : (a, b) => b.properties[t + '_neg'] - a.properties[t + '_neg'];
+  for (const f of G.features.filter(f => f.properties[t + '_est'] === est).sort(orden)) {
     const c = f.properties.colonia || f.properties.clave, p = f.properties;
     // como en la Guía de la Etapa 3: no repetir colonia ni elegir una zona a menos de 1.5 km de otra ya elegida
     const lejos = out.every(o => km(p.lat, p.lon, o.properties.lat, o.properties.lon) > 1.5);
@@ -185,7 +187,7 @@ function dondeEntrar() {
     const t = ABR[i], top = topZonas(i, 'recomendada', 5), max = top.length ? top[0].properties[t + '_idx'] : 1;
     return `<div class="zona-ind" style="--c:${COL[i]}"><h4><i class="punto ${t}"></i>${i}</h4>` +
       top.map(f => `<div class="zona-fila"><span>${esc(f.properties.colonia || f.properties.clave)}</span><div class="barra-z"><i style="width:${100 * f.properties[t + '_idx'] / max}%"></i></div><b>${f.properties[t + '_idx']}x</b></div>`).join('') +
-      `<div class="zona-sat">Saturadas: ${topZonas(i, 'saturada', 4).map(f => esc(f.properties.colonia || f.properties.clave)).join(', ')}</div></div>`;
+      `<div class="zona-sat">Saturadas: ${topZonas(i, 'saturada', 5).map(f => esc(f.properties.colonia || f.properties.clave)).join(', ')}</div></div>`;
   }).join('');
 }
 

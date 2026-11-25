@@ -185,6 +185,21 @@ nse = nse.set_index('clave')
 d26['clave'] = (pd.to_numeric(d26['cve_loc'], errors='coerce').astype('Int64').astype(str).str.zfill(4) + '-' +
                 d26['ageb'].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(4))
 colonia = d26.groupby('clave')['nomb_asent'].agg(lambda s: s.dropna().astype(str).str.title().mode().iat[0] if s.notna().any() else '')
+# Nombres más legibles: el DENUE trae las colonias sin acentos y en mayúsculas ("GUSTAVO DIAZ ORDAS", "UH REVOLUCION")
+ACENTOS = {'Mexico': 'México', 'Aleman': 'Alemán', 'Diaz': 'Díaz', 'Ordas': 'Ordaz', 'Bojorquez': 'Bojórquez', 'Solorzano': 'Solórzano',
+           'Lopez': 'López', 'Avila': 'Ávila', 'Americas': 'Américas', 'Revolucion': 'Revolución', 'Juarez': 'Juárez', 'Itzimna': 'Itzimná',
+           'Dzitya': 'Dzityá', 'Garcia': 'García', 'Gineres': 'Ginerés', 'Chuburna': 'Chuburná', 'Pacabtun': 'Pacabtún',
+           'Chuminopolis': 'Chuminópolis', 'Velazquez': 'Velázquez', 'Ramon': 'Ramón', 'Jose': 'José', 'Maria': 'María', 'Jesus': 'Jesús',
+           'Heroes': 'Héroes', 'Poligono': 'Polígono', 'Martinez': 'Martínez', 'Gonzalez': 'González', 'Hernandez': 'Hernández',
+           'Fatima': 'Fátima', 'Tecnologico': 'Tecnológico', 'Mayapan': 'Mayapán', 'Kanasin': 'Kanasín', 'Chenku': 'Chenkú',
+           'Xcumpich': 'Xcumpich', 'Cordemex': 'Cordemex', 'Andres': 'Andrés', 'Nicolas': 'Nicolás', 'Sebastian': 'Sebastián',
+           'Melitón': 'Melitón', 'Merida': 'Mérida', 'Dzitya': 'Dzityá', 'Chuburna': 'Chuburná', 'Montejo': 'Montejo'}
+ROMANOS = {'Ii': 'II', 'Iii': 'III', 'Iv': 'IV', 'Vi': 'VI', 'Uh': 'UH', 'Fovissste': 'FOVISSSTE', 'Infonavit': 'INFONAVIT'}
+MENORES = {'De', 'Del', 'La', 'Las', 'Los', 'Y', 'El'}
+def bonito(nombre):
+    w = str(nombre).split()
+    return ' '.join(ROMANOS.get(x, ACENTOS.get(x, x.lower() if k and x in MENORES else x)) for k, x in enumerate(w))
+colonia = colonia.map(bonito)
 
 def centroide(g):
     """Centro geométrico (centroide de área) del polígono, igual que geopandas .centroid. Antes se usaba el promedio de los
